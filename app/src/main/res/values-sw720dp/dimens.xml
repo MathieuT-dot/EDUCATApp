@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <dimen name="font_size_title">36sp</dimen>
+    <dimen name="font_size_normal">31sp</dimen>
+    <dimen name="font_size_small">27sp</dimen>
+
+    <dimen name="width_questionnaire_item_details">183dp</dimen>
+    <dimen name="width_connected_user_details">216dp</dimen>
+    <dimen name="width_submission_item_details">257dp</dimen>
+    <dimen name="width_setup_item_details">295dp</dimen>
+    <dimen name="width_general">540dp</dimen>
+
+    <dimen name="height_button">112dp</dimen>
+    <dimen name="height_logo">225dp</dimen>
+
+    <dimen name="padding_button">35dp</dimen>
+    <dimen name="padding_scale">90dp</dimen>
+    <dimen name="padding_seek_bar">18dp</dimen>
+
+</resources>

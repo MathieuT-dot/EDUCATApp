@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:keepScreenOn="true"
+    tools:context=".activities.OasActivity"
+    android:baselineAligned="false">
+
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1">
+
+        <com.educat.android.educatapp.helperClasses.DynamicRadar
+            android:id="@+id/radar_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:visibility="visible"/>
+
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_margin="8dp">
+
+        <Button
+            android:id="@+id/daily_diary_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/daily_diary"
+            android:textSize="@dimen/font_size_normal"
+            android:padding="@dimen/padding_button"
+            android:ems="8"
+            android:layout_marginTop="10dp"
+            android:layout_marginEnd="15dp"
+            android:layout_gravity="end"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:layout_marginBottom="10dp"
+            android:layout_marginEnd="15dp"
+            android:gravity="bottom">
+
+            <Button
+                android:id="@+id/buzzer_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="@dimen/font_size_normal"
+                android:ems="9"
+                android:text="Buzzer: off"
+                android:layout_gravity="end" />
+
+            <Button
+                android:id="@+id/haptic_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="@dimen/font_size_normal"
+                android:ems="9"
+                android:text="Haptic: off"
+                android:layout_gravity="end"/>
+
+            <Button
+                android:id="@+id/visual_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="@dimen/font_size_normal"
+                android:ems="9"
+                android:text="Visual: off"
+                android:layout_gravity="end"/>
+
+        </LinearLayout>
+
+
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,6 @@
+include ':app'
+rootProject.name='EDUCAT App'
+
+include ':kuleuvenlibrary'
+project(':kuleuvenlibrary').projectDir = new File(settingsDir, '../Libraries/kuleuvenlibrary')
+include ':apwlibrary'
