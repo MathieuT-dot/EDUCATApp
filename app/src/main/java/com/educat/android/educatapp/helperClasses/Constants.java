@@ -9,19 +9,13 @@ public class Constants {
 
     // URL's
     public static final String EDUCAT_URL = "www.educat2seas.eu";
-//    public static final String API_URL = "http://clouddb.myriade.be/educat/";
     public static final String API_URL = "https://educat.clouddb.myriade.be/api/";
 
     // added "_laravel" to make sure everyone is using the right url, independent from the shared preferences
     // change this to insert a new url
     // change setting name in preferences.xml
     public static final String SETTING_SERVER_API_URL = "setting_server_api_url_laravel_https";
-
-//    public static final String URL_EDUCAT = "nomadeproject.eu";
-//    public static final String URL_REST = "http://clouddb.myriade.be/nomade/";
-
-//    public static final String URL_REST = "http://91.198.203.234/educat/";
-//    public static final String URL_REST = "https://www.educat2seas.eu/data/";
+    public static final String SERVER_API_IP = "server_api_ip";
 
     // Permissions
     public static final String[] PERMISSIONS = new String[] {

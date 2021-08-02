@@ -51,8 +51,8 @@ import eltos.simpledialogfragment.SimpleDialog;
 /**
  * Interreg VA 2 Seas – Project EDUCAT
  * WP 1, Activity 1.1, Deliverable 1.1.2 and 1.1.3
- * Date 2020/09, PP4, Author Mathieu Troch
- * Version Number 3.5
+ * Date 2020/07, PP4, Author Mathieu Troch
+ * Version Number 4.1
  * EDUCAT App
  *
  * MainActivity

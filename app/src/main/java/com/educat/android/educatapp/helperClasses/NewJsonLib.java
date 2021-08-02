@@ -363,28 +363,28 @@ public class NewJsonLib {
             try {
                 createdAt = sdfDateAndTime.format(sdfDateAndTimeLaravel.parse(createdAt));
             } catch (ParseException e) {
-                e.printStackTrace();
+//                e.printStackTrace();
             }
 
             String updatedAt = jSubmission.getString("updated_at");
             try {
                 updatedAt = sdfDateAndTime.format(sdfDateAndTimeLaravel.parse(updatedAt));
             } catch (ParseException e) {
-                e.printStackTrace();
+//                e.printStackTrace();
             }
 
             String startedAt = jSubmission.getString("started_at");
             try {
                 startedAt = sdfDateAndTime.format(sdfDateAndTimeLaravel.parse(startedAt));
             } catch (ParseException e) {
-                e.printStackTrace();
+//                e.printStackTrace();
             }
 
             String finishedAt = jSubmission.getString("finished_at");
             try {
                 finishedAt = sdfDateAndTime.format(sdfDateAndTimeLaravel.parse(finishedAt));
             } catch (ParseException e) {
-                e.printStackTrace();
+//                e.printStackTrace();
             }
 
             String deletedAt = jSubmission.getString("deleted_at");

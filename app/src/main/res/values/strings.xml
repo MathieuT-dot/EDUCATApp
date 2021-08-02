@@ -438,10 +438,16 @@
     <string name="about_changelog_value" translatable="false"><Data>
         <![CDATA[
 
-        <b>Version 3.12</b><br/>
-        ??/??/2021<br/>
+        <b>Version 4.1</b><br/>
+        02/08/2021<br/>
+        - The IP address for the TCP connection is now dynamically resolved from the URL<br/>
+        - Migrated to a new PDF library, which results in faster creation, smaller file sizes, no corrupt characters, better image quality...<br/><br/>
+
+        <b>Version 4.0</b><br/>
+        12/07/2021<br/>
         - Enabled the filter on questionnaire option in the submitted questionnaires list<br/>
-        - ...<br/><br/>
+        - Solved a bug where users with old data in SharedPreferences would sometimes experience a crash<br/>
+        - Removed unused code, resources, images...<br/><br/>
 
         <b>Version 3.11</b><br/>
         02/06/2021<br/>

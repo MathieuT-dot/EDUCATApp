@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
+import android.os.AsyncTask;
 import android.os.BatteryManager;
 import android.os.Bundle;
 import android.os.Handler;
@@ -16,6 +17,7 @@ import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
 import android.provider.Settings;
+import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 import androidx.preference.PreferenceManager;
@@ -61,6 +63,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.math.BigDecimal;
+import java.net.InetAddress;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -470,6 +476,8 @@ public class UsbAndTcpService extends Service {
                 }
             }, 500);
         }
+
+        resolveServerIp();
     }
 
     private void stopForegroundService(){
@@ -3173,7 +3181,7 @@ public class UsbAndTcpService extends Service {
     }
 
     private void initManager(){
-        String serverIp = "91.198.203.234";
+        String serverIp = defaultSharedPreferences.getString(Constants.SERVER_API_IP, "91.198.203.234");
         int serverPort = 20001;
         ConnectionInfo mInfo = new ConnectionInfo(serverIp, serverPort);
         OkSocketOptions mOkOptions = new OkSocketOptions.Builder()
@@ -3590,6 +3598,29 @@ public class UsbAndTcpService extends Service {
 
         }
 
+    }
+
+    /**
+     * Resolves the IP address of the current server URL.
+     */
+    private void resolveServerIp() {
+        String urlString = defaultSharedPreferences.getString(Constants.SETTING_SERVER_API_URL, Constants.API_URL);
+        AsyncTask.execute(() -> {
+            InetAddress address;
+            String serverIp = "91.198.203.234";
+            try {
+                address = InetAddress.getByName(new URL(urlString).getHost());
+                serverIp = address.getHostAddress();
+
+                MyLog.d(TAG, "URL: " + urlString);
+                MyLog.d(TAG, "IP: " + serverIp);
+            } catch (UnknownHostException | MalformedURLException e) {
+                e.printStackTrace();
+                MyLog.e(TAG, "Resolving IP failed, defaulting to " + serverIp);
+            }
+
+            defaultEditor.putString(Constants.SERVER_API_IP, serverIp).apply();
+        });
     }
 
     /**

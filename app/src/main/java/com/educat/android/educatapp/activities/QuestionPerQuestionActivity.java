@@ -59,6 +59,15 @@ import com.kuleuven.android.kuleuvenlibrary.submittedQuestionnaireClasses.Submit
 import com.kuleuven.android.kuleuvenlibrary.submittingClasses.SubmittingAnswer;
 import com.kuleuven.android.kuleuvenlibrary.submittingClasses.SubmittingQuestion;
 import com.kuleuven.android.kuleuvenlibrary.submittingClasses.SubmittingQuestionnaire;
+import com.tom_roush.pdfbox.pdmodel.PDDocument;
+import com.tom_roush.pdfbox.pdmodel.PDPage;
+import com.tom_roush.pdfbox.pdmodel.PDPageContentStream;
+import com.tom_roush.pdfbox.pdmodel.common.PDRectangle;
+import com.tom_roush.pdfbox.pdmodel.font.PDFont;
+import com.tom_roush.pdfbox.pdmodel.font.PDType1Font;
+import com.tom_roush.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import com.tom_roush.pdfbox.util.PDFBoxResourceLoader;
 import com.wdullaer.materialdatetimepicker.date.DatePickerDialog;
 import com.wdullaer.materialdatetimepicker.time.TimePickerDialog;
 
@@ -67,6 +76,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.ParsePosition;
@@ -75,13 +85,12 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 
-import crl.android.pdfwriter.PDFWriter;
-import crl.android.pdfwriter.StandardFonts;
 import eltos.simpledialogfragment.SimpleDialog;
 import eltos.simpledialogfragment.list.CustomListDialog;
 import eltos.simpledialogfragment.list.SimpleListDialog;
@@ -158,18 +167,15 @@ public class QuestionPerQuestionActivity extends AppCompatActivity implements Si
 
     private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
 
-    private PDFWriter mPDFWriter;
-    private int defaultLeftMargin = 50;
-    private int questionLeftMargin = 70;
-    private int answerLeftMargin = 90;
-    private int currentTopPositionFromBottom = 772;
-    private int defaultFontSize = 12;
-    private int titleFontSize = 20;
-    private int defaultInterlinearDistance = 10;
-    private int smallInterlinearDistance = 5;
-    private int bigInterlinearDistance = 25;
-    private static final int A4_WIDTH = 595;
-    private static final int A4_HEIGHT = 842;
+    private PDDocument document;
+    private PDPage page;
+    private PDPageContentStream contentStream;
+    private float width;
+    private float startY;
+    private float endY;
+    private float heightCounter;
+    private float currentXPosition;
+    private float wrapOffsetY;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -2516,239 +2522,385 @@ public class QuestionPerQuestionActivity extends AppCompatActivity implements Si
      * @param data contains the save location
      */
     private void createPdfFile(Intent data) {
-        Bitmap radioButtonBitmap = BitmapFactory.decodeResource(context.getResources(), R.drawable.radio_button);
-        Bitmap checkBoxBitmap = BitmapFactory.decodeResource(context.getResources(), R.drawable.check_box);
+        // Enable Android asset loading
+        PDFBoxResourceLoader.init(getApplicationContext());
 
-        mPDFWriter = new PDFWriter();
+        document = new PDDocument();
+        page = new PDPage(PDRectangle.A4);
+        document.addPage(page);
 
-        mPDFWriter.setFont(StandardFonts.SUBTYPE, StandardFonts.TIMES_BOLD);
-        addText(defaultLeftMargin, currentTopPositionFromBottom, titleFontSize, questionnaire.getTitle());
-        mPDFWriter.setFont(StandardFonts.SUBTYPE, StandardFonts.TIMES_ROMAN);
+        PDRectangle mediaBox = page.getMediaBox();
+        float marginY = 80;
+        float marginX = 60;
+        width = mediaBox.getWidth() - 2 * marginX;
+        float startX = mediaBox.getLowerLeftX() + marginX;
+        float endX = mediaBox.getUpperRightX() - marginX;
+        startY = mediaBox.getUpperRightY() - marginY;
+        endY = mediaBox.getLowerLeftY() + marginY;
+        heightCounter = startY;
+        currentXPosition = 0;
+        float answerPositionX = startX + 10;
 
-        Bitmap bitmap = BitmapFactory.decodeResource(context.getResources(), R.drawable.educat_logo_small);
-        mPDFWriter.addImageKeepRatio(420, 735, 80, 80, bitmap);
+        float smallOffsetY = 8;
+        float normalOffsetY = 20;
+        wrapOffsetY = 2;
 
-        String descriptionString = questionnaire.getDescription();
+        Paint titleTextPaint = new TextPaint();
+        float titleFontSize = 20;
+        titleTextPaint.setTextSize(titleFontSize);
+        titleTextPaint.setTypeface(Typeface.create("Helvetica", Typeface.BOLD));
+        Paint.FontMetrics titleFontMetrics = titleTextPaint.getFontMetrics();
+        float titleFontHeight = titleFontMetrics.descent - titleFontMetrics.ascent;
 
-        if (descriptionString.length() > 0) {
-            String[] splitDescription = descriptionString.split(System.lineSeparator());
-            for (int k = 0; k < splitDescription.length; k++) {
-                currentTopPositionFromBottom = moveCursor(currentTopPositionFromBottom, defaultFontSize, bigInterlinearDistance);
-                addText(defaultLeftMargin, currentTopPositionFromBottom, defaultFontSize, splitDescription[k]);
-            }
-        }
+        Paint defaultTextPaint = new TextPaint();
+        float defaultFontSize = 12;
+        defaultTextPaint.setTextSize(defaultFontSize);
+        defaultTextPaint.setTypeface(Typeface.create("Helvetica", Typeface.NORMAL));
+        Paint.FontMetrics defaultFontMetrics = defaultTextPaint.getFontMetrics();
+        float defaultFontHeight = defaultFontMetrics.descent - defaultFontMetrics.ascent;
 
-        Question question;
-        Answer answer;
-
-        for (int i = 0; i < questionnaire.getQuestionsList().size(); i++) {
-
-            question = questionnaire.getQuestionsList().get(i);
-
-            String questionString = parseAlternateQuestionNumbering(i + 1, question.getQuestion());
-            questionString = questionString.replaceAll("\\/","\\\\/");
-            questionString = questionString.replaceAll("\\(","\\\\(");
-            questionString = questionString.replaceAll("\\)","\\\\)");
-            questionString = questionString.replaceAll("–","-");
-            questionString = questionString.replaceAll("’","'");
-
-            String[] splitQuestion = questionString.split(System.lineSeparator());
-
-            for (int k = 0; k < splitQuestion.length; k++) {
-
-                if (k == 0) {
-                    currentTopPositionFromBottom = moveCursor(currentTopPositionFromBottom, defaultFontSize, bigInterlinearDistance);
-                }
-                else {
-                    currentTopPositionFromBottom = moveCursor(currentTopPositionFromBottom, defaultFontSize, smallInterlinearDistance);
-                }
-                addText(questionLeftMargin, currentTopPositionFromBottom, defaultFontSize, splitQuestion[k]);
-            }
-
-            for (int k = 0; k < question.getAnswersList().size(); k++) {
-
-                answer = question.getAnswersList().get(k);
-
-                String prefix = answer.getPrefix();
-
-                if (prefix.equals("null") || prefix.equals("") || prefix.equals(" ")) {
-                    prefix = "..................................................";
-                }
-                else {
-                    if (answer.getTypeId() > 1) {
-                        switch (prefix.substring(prefix.length() - 1)){
-                            case ":":
-                            case "?":
-                            case "!":
-                                prefix = String.format("%s ", parseAlternateAnswerNumbering(prefix));
-                                break;
-
-                            default:
-                                prefix = String.format("%s: ", parseAlternateAnswerNumbering(prefix));
-                        }
-                    }
-                    else {
-                        prefix = String.format("%s ", parseAlternateAnswerNumbering(prefix));
-                    }
-
-                    switch (answer.getTypeId()) {
-
-                        case Answer.FIXED: // Fixed
-                            // Type 1 answer not possible for no bullets or already added as setText for the radio button or the check_box
-                            break;
-
-                        case Answer.INTEGER: // Integer
-                        case Answer.DOUBLE: // Double
-                        case Answer.SCALE: // Scale
-                            prefix = String.format("%s ...", prefix);
-                            break;
-
-                        case Answer.YES_NO: // Yes/No Scale
-                            prefix = String.format("%s %s // %s", prefix, getString(R.string.yes), getString(R.string.no));
-                            break;
-
-                        case Answer.DATE: // Date
-                        case Answer.DATE_PAST: // Date (Past)
-                        case Answer.DATE_FUTURE: // Date (Future)
-                            prefix = String.format("%s ../../....", prefix);
-                            break;
-
-                        case Answer.DATETIME: // Datetime
-                        case Answer.DATETIME_PAST: // Datetime
-                        case Answer.DATETIME_FUTURE: // Datetime
-                            prefix = String.format("%s ../../.... ..:..", prefix);
-                            break;
-
-                        case Answer.TIME_HH_MM:
-                            prefix = String.format("%s ..:..", prefix);
-                            break;
-
-                        case Answer.TIME_HH_MM_SS:
-                            prefix = String.format("%s ..:..:..", prefix);
-                            break;
-
-                        case Answer.OPTIONAL_CUSTOM: // Optional custom
-                        case Answer.MANDATORY_CUSTOM: // Mandatory custom
-                            prefix = String.format("%s ..................................................", prefix);
-                            break;
-                    }
-                }
-
-                if (question.getBulletType() == Question.NO_BULLETS) {
-                    // No bullets
-                    currentTopPositionFromBottom = moveCursor(currentTopPositionFromBottom, defaultFontSize, defaultInterlinearDistance);
-                    addText(answerLeftMargin, currentTopPositionFromBottom, defaultFontSize, prefix);
-                }
-                else if (question.getBulletType() == Question.RADIO_BUTTONS) {
-                    // Radio buttons
-                    currentTopPositionFromBottom = moveCursor(currentTopPositionFromBottom, defaultFontSize, defaultInterlinearDistance);
-                    mPDFWriter.addImageKeepRatio(answerLeftMargin, currentTopPositionFromBottom - 1, 10, 10, radioButtonBitmap);
-                    addText(answerLeftMargin + 15, currentTopPositionFromBottom, defaultFontSize, prefix);
-                }
-                else if (question.getBulletType() == Question.CHECKBOXES) {
-                    // Checkboxes
-                    currentTopPositionFromBottom = moveCursor(currentTopPositionFromBottom, defaultFontSize, defaultInterlinearDistance);
-                    mPDFWriter.addImageKeepRatio(answerLeftMargin, currentTopPositionFromBottom - 1, 10, 10, checkBoxBitmap);
-                    addText(answerLeftMargin + 15, currentTopPositionFromBottom, defaultFontSize, prefix);
-                }
-            }
-        }
-
-//        mPDFWriter.setFont(StandardFonts.SUBTYPE, StandardFonts.TIMES_ROMAN);
-//        mPDFWriter.addRawContent("1 0 0 rg\n");
-//        mPDFWriter.addTextAsHex(70, 50, 12, "68656c6c6f20776f726c6420286173206865782921");
-//        mPDFWriter.setFont(StandardFonts.SUBTYPE, StandardFonts.COURIER, StandardFonts.WIN_ANSI_ENCODING);
-//        mPDFWriter.addRawContent("0 0 0 rg\n");
-//        mPDFWriter.addText(30, 90, 10, "� CRL", Transformation.DEGREES_270_ROTATION);
-//
-//        mPDFWriter.newPage();
-//        mPDFWriter.addRawContent("[] 0 d\n");
-//        mPDFWriter.addRawContent("1 w\n");
-//        mPDFWriter.addRawContent("0 0 1 RG\n");
-//        mPDFWriter.addRawContent("0 1 0 rg\n");
-//        mPDFWriter.addRectangle(40, 50, 280, 50);
-//        mPDFWriter.addText(85, 75, 18, "• Code Research Laboratories");
-//
-//        mPDFWriter.newPage();
-//        mPDFWriter.setFont(StandardFonts.SUBTYPE, StandardFonts.COURIER_BOLD);
-//        mPDFWriter.addText(150, 150, 14, "http://coderesearchlabs.com");
-//        mPDFWriter.addLine(150, 140, 270, 140);
-
-        int pageCount = mPDFWriter.getPageCount();
-        for (int i = 0; i < pageCount; i++) {
-            mPDFWriter.setCurrentPage(i);
-            mPDFWriter.addText(550, 30, 10, (i + 1) + " / " + pageCount);
-        }
-
-        //        Bitmap bitmap = getBitmapFromView(bodyChartImageView);
-
-        //        mPDFWriter.addImageKeepRatio(100, 100, 300, 300, bitmap);
-
-        String pdfContent = mPDFWriter.asString();
+        // Create font objects
+        PDFont titleFont = PDType1Font.HELVETICA_BOLD;
+        PDFont defaultFont = PDType1Font.HELVETICA;
 
         try {
+            // Define a content stream for adding to the PDF
+            contentStream = new PDPageContentStream(document, page);
+
+            // Load in logo
+            InputStream in = getAssets().open("educat_logo_small.png");
+
+            // Draw the logo
+            Bitmap bitmap = BitmapFactory.decodeStream(in);
+            PDImageXObject xImage = LosslessFactory.createFromImage(document, bitmap);
+            contentStream.drawImage(xImage, endX - 125, startY - 78, 125, 78);
+
+            // Write title
+            contentStream.beginText();
+
+            addParagraph(startX, 0, true, titleFont, titleFontSize, titleFontHeight, questionnaire.getTitle(), width - 125);
+
+            addParagraph(startX, 80 - titleFontHeight * 2 - normalOffsetY, titleFont, titleFontSize, titleFontHeight, " ");
+
+            String descriptionString = questionnaire.getDescription();
+
+            if (descriptionString.length() > 0) {
+                String[] splitDescription = descriptionString.split(System.lineSeparator());
+                for (int k = 0; k < splitDescription.length; k++) {
+                    if (k == 0) {
+                        addParagraph(startX, normalOffsetY, defaultFont, defaultFontSize, defaultFontHeight, splitDescription[k]);
+                    }
+                    else {
+                        addParagraph(startX, wrapOffsetY, defaultFont, defaultFontSize, defaultFontHeight, splitDescription[k]);
+                    }
+                }
+            }
+
+            // Load in radio button
+            InputStream inRadioButton = getAssets().open("radio_button.png");
+
+            // Draw the logo
+            Bitmap bitmapRadioButton = BitmapFactory.decodeStream(inRadioButton);
+            PDImageXObject xImageRadioButton = LosslessFactory.createFromImage(document, bitmapRadioButton);
+
+            // Load in checkbox
+            InputStream inCheckBox = getAssets().open("check_box.png");
+
+            // Draw the logo
+            Bitmap bitmapCheckBox = BitmapFactory.decodeStream(inCheckBox);
+            PDImageXObject xImageCheckBox = LosslessFactory.createFromImage(document, bitmapCheckBox);
+
+            Question question;
+            Answer answer;
+
+            for (int i = 0; i < questionnaire.getQuestionsList().size(); i++) {
+
+                question = questionnaire.getQuestionsList().get(i);
+
+                contentStream.endText();
+                contentStream.beginText();
+
+                String questionString = parseAlternateQuestionNumbering(i + 1, question.getQuestion());
+                String[] splitQuestion = questionString.split(System.lineSeparator());
+                for (int k = 0; k < splitQuestion.length; k++) {
+                    if (k == 0) {
+                        addParagraph(startX, normalOffsetY, true, defaultFont, defaultFontSize, defaultFontHeight, splitQuestion[k]);
+                    }
+                    else {
+                        addParagraph(startX, wrapOffsetY, defaultFont, defaultFontSize, defaultFontHeight, splitQuestion[k]);
+                    }
+                }
+
+                contentStream.endText();
+                contentStream.beginText();
+
+                for (int k = 0; k < question.getAnswersList().size(); k++) {
+
+                    answer = question.getAnswersList().get(k);
+
+                    String prefix = answer.getPrefix();
+
+                    if (prefix.equals("null") || prefix.equals("") || prefix.equals(" ") || prefix.equals(":")) {
+                        prefix = "..................................................";
+                    }
+                    else {
+                        if (answer.getTypeId() > 1) {
+                            switch (prefix.substring(prefix.length() - 1)){
+                                case ":":
+                                case "?":
+                                case "!":
+                                    prefix = String.format("%s ", parseAlternateAnswerNumbering(prefix));
+                                    break;
+
+                                default:
+                                    prefix = String.format("%s: ", parseAlternateAnswerNumbering(prefix));
+                            }
+                        }
+                        else {
+                            prefix = String.format("%s ", parseAlternateAnswerNumbering(prefix));
+                        }
+
+                        switch (answer.getTypeId()) {
+
+                            case Answer.FIXED: // Fixed
+                                // Type 1 answer not possible for no bullets or already added as setText for the radio button or the check_box
+                                break;
+
+                            case Answer.INTEGER: // Integer
+                            case Answer.DOUBLE: // Double
+                            case Answer.SCALE: // Scale
+                                prefix = String.format("%s ...", prefix);
+                                break;
+
+                            case Answer.YES_NO: // Yes/No Scale
+                                prefix = String.format("%s %s // %s", prefix, getString(R.string.yes), getString(R.string.no));
+                                break;
+
+                            case Answer.DATE: // Date
+                            case Answer.DATE_PAST: // Date (Past)
+                            case Answer.DATE_FUTURE: // Date (Future)
+                                prefix = String.format("%s ../../....", prefix);
+                                break;
+
+                            case Answer.DATETIME: // Datetime
+                            case Answer.DATETIME_PAST: // Datetime
+                            case Answer.DATETIME_FUTURE: // Datetime
+                                prefix = String.format("%s ../../.... ..:..", prefix);
+                                break;
+
+                            case Answer.TIME_HH_MM:
+                                prefix = String.format("%s ..:..", prefix);
+                                break;
+
+                            case Answer.TIME_HH_MM_SS:
+                                prefix = String.format("%s ..:..:..", prefix);
+                                break;
+
+                            case Answer.OPTIONAL_CUSTOM: // Optional custom
+                            case Answer.MANDATORY_CUSTOM: // Mandatory custom
+                                prefix = String.format("%s ..................................................", prefix);
+                                break;
+                        }
+                    }
+
+                    if (question.getBulletType() == Question.NO_BULLETS) {
+                        // No bullets
+                        addParagraph(answerPositionX, smallOffsetY, true, defaultFont, defaultFontSize, defaultFontHeight, prefix);
+                        contentStream.endText();
+                        contentStream.beginText();
+                    }
+                    else if (question.getBulletType() == Question.RADIO_BUTTONS) {
+                        // Radio buttons
+                        int lines = addParagraph(answerPositionX + 15, smallOffsetY, true, defaultFont, defaultFontSize, defaultFontHeight, prefix);
+                        contentStream.endText();
+                        contentStream.drawImage(xImageRadioButton, answerPositionX, heightCounter + (lines - 1) * (wrapOffsetY + defaultFontHeight), 10, 10);
+                        contentStream.beginText();
+                    }
+                    else if (question.getBulletType() == Question.CHECKBOXES) {
+                        // Checkboxes
+                        int lines = addParagraph(answerPositionX + 15, smallOffsetY, true, defaultFont, defaultFontSize, defaultFontHeight, prefix);
+                        contentStream.endText();
+                        contentStream.drawImage(xImageCheckBox, answerPositionX, heightCounter + (lines - 1) * (wrapOffsetY + defaultFontHeight), 10, 10);
+                        contentStream.beginText();
+                    }
+                }
+            }
+
+            contentStream.endText();
+
+            contentStream.close();
+
+            // Adding page numbers to the whole document
+            int pageCount = document.getNumberOfPages();
+            for (int i = 0; i < pageCount; i++) {
+                String pageNumberString = (i + 1) + " / " + pageCount;
+                float size = defaultFontSize * defaultFont.getStringWidth(pageNumberString) / 1000;
+                page = document.getPage(i);
+                contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true);
+                contentStream.beginText();
+                contentStream.setFont(defaultFont, defaultFontSize);
+                contentStream.newLineAtOffset(endX + marginX - endY + defaultFontHeight - size, endY - defaultFontHeight);
+                contentStream.showText(pageNumberString);
+                contentStream.endText();
+                contentStream.close();
+            }
+
+            // Make sure that the content stream is closed:
+            contentStream.close();
+
+            // Save the final pdf document to a file
             Uri uri = data.getData();
-
             OutputStream outputStream = getContentResolver().openOutputStream(uri);
-
-            outputStream.write(pdfContent.getBytes(crl.android.pdfwriter.StandardCharsets.ISO_8859_1));
-
+            document.save(outputStream);
             outputStream.close();
+            document.close();
 
             hideDialog();
             runOnUiThread(() -> Utilities.displayToast(context, getString(R.string.pdf_saved)));
+
         } catch (IOException e) {
+            e.printStackTrace();
             hideDialog();
             runOnUiThread(() -> Utilities.displayToast(context, getString(R.string.pdf_failed)));
         }
     }
 
     /**
-     * Adds text to the PDF file.
-     * If the text is too long, the text will be split and printed on the next line.
+     * Adds one or multiple lines of text to the PDF
+     *
+     * @param positionX X position to write the text
+     * @param offsetY Y offset to write the text
+     * @param font to display the text
+     * @param fontSize to display the text
+     * @param fontHeight to determine the extra Y offset
+     * @param text string to write
      */
-    private void addText(int leftPosition, int topPositionFromBottom, int fontSize, String text) {
-        Paint paint = new TextPaint();
-        paint.setTextSize(fontSize);
-        paint.setTypeface(Typeface.create("Times New Roman", Typeface.NORMAL));
-        float textLength = paint.measureText(text);
-
-        if (leftPosition + textLength > A4_WIDTH - 40) {
-            int lastSpace = text.lastIndexOf(' ');
-            String truncatedText = text.substring(0, lastSpace);
-            textLength = paint.measureText(truncatedText);
-
-            while (leftPosition + textLength > A4_WIDTH - 40) {
-                lastSpace = truncatedText.lastIndexOf(' ');
-                if (lastSpace == -1) {
-                    break;
-                }
-                truncatedText = truncatedText.substring(0, lastSpace);
-                textLength = paint.measureText(truncatedText);
-            }
-
-            mPDFWriter.addText(leftPosition, topPositionFromBottom, fontSize, truncatedText);
-
-            currentTopPositionFromBottom = moveCursor(currentTopPositionFromBottom, fontSize, smallInterlinearDistance);
-            addText(leftPosition, currentTopPositionFromBottom, defaultFontSize, text.substring(lastSpace + 1));
-        }
-        else {
-            mPDFWriter.addText(leftPosition, topPositionFromBottom, fontSize, text);
-        }
+    private void addParagraph(float positionX, float offsetY, PDFont font, float fontSize, float fontHeight, String text) throws IOException {
+        addParagraph(positionX, offsetY, false, font, fontSize, fontHeight, text, width);
     }
 
     /**
-     * Moves the cursor for the PDF writer, creates new page if needed.
-     * @return new cursor position
+     * Adds one or multiple lines of text to the PDF
+     *
+     * @param positionX X position to write the text
+     * @param offsetY Y offset to write the text
+     * @param setYToHeightCounter set Y location to height counter
+     * @param font to display the text
+     * @param fontSize to display the text
+     * @param fontHeight to determine the extra Y offset
+     * @param text string to write
      */
-    private int moveCursor(int currentTopPositionFromBottom, int previousFontSize, int interlinearDistance) {
-        if (currentTopPositionFromBottom < 80) {
-            mPDFWriter.newPage();
-            return 772;
+    private int addParagraph(float positionX, float offsetY, boolean setYToHeightCounter, PDFont font, float fontSize, float fontHeight, String text) throws IOException {
+        return addParagraph(positionX, offsetY, setYToHeightCounter, font, fontSize, fontHeight, text, width);
+    }
+
+    /**
+     * Adds one or multiple lines of text to the PDF
+     *
+     * @param positionX X position to write the text
+     * @param offsetY Y offset to write the text
+     * @param setYToHeightCounter set Y location to height counter
+     * @param font to display the text
+     * @param fontSize to display the text
+     * @param fontHeight to determine the extra Y offset
+     * @param text string to write
+     * @param width available width
+     */
+    private int addParagraph(float positionX, float offsetY, boolean setYToHeightCounter, PDFont font, float fontSize, float fontHeight, String text, float width) throws IOException {
+        List<String> lines = parseLines(text.replaceAll("\\p{Cntrl}", ""), width, font, fontSize);
+        contentStream.setFont(font, fontSize);
+
+        float neededHeight = lines.size() * (wrapOffsetY + fontHeight) + offsetY - wrapOffsetY;
+
+        if (heightCounter - neededHeight < endY) {
+            // Create new page
+            contentStream.endText();
+            contentStream.close();
+            page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            contentStream = new PDPageContentStream(document, page);
+            contentStream.beginText();
+            contentStream.setFont(font, fontSize);
+
+            for (int i = 0; i < lines.size(); i++) {
+                if (i == 0) {
+                    contentStream.newLineAtOffset(positionX, startY - fontHeight);
+                    heightCounter = startY - fontHeight;
+                    currentXPosition = positionX;
+                }
+                else {
+                    contentStream.newLineAtOffset(0, - wrapOffsetY - fontHeight);
+                    heightCounter -= wrapOffsetY + fontHeight;
+                }
+                contentStream.showText(lines.get(i));
+            }
+        }
+        else if (setYToHeightCounter) {
+            for (int i = 0; i < lines.size(); i++) {
+                if (i == 0) {
+                    contentStream.newLineAtOffset(positionX, heightCounter - offsetY - fontHeight);
+                    heightCounter -= offsetY + fontHeight;
+                    currentXPosition = positionX;
+                }
+                else {
+                    contentStream.newLineAtOffset(0, - wrapOffsetY - fontHeight);
+                    heightCounter -= wrapOffsetY + fontHeight;
+                }
+                contentStream.showText(lines.get(i));
+            }
         }
         else {
-            return currentTopPositionFromBottom - previousFontSize - interlinearDistance;
+            for (int i = 0; i < lines.size(); i++) {
+                if (i == 0) {
+                    contentStream.newLineAtOffset(positionX - currentXPosition, - offsetY - fontHeight);
+                    heightCounter -= offsetY + fontHeight;
+                    currentXPosition += positionX - currentXPosition;
+                }
+                else {
+                    contentStream.newLineAtOffset(0, - wrapOffsetY - fontHeight);
+                    heightCounter -= wrapOffsetY + fontHeight;
+                }
+                contentStream.showText(lines.get(i));
+            }
         }
+
+        return lines.size();
+    }
+
+    /**
+     * Splits up the text depending on the available width, the font and the font size
+     *
+     * @param text string to split
+     * @param width available width
+     * @param font font for the text
+     * @param fontSize font size for the text
+     * @return a list of split strings
+     */
+    private static List<String> parseLines(String text, float width, PDFont font, float fontSize) throws IOException {
+        List<String> lines = new ArrayList<String>();
+        int lastSpace = -1;
+        while (text.length() > 0) {
+            int spaceIndex = text.indexOf(' ', lastSpace + 1);
+            if (spaceIndex < 0)
+                spaceIndex = text.length();
+            String subString = text.substring(0, spaceIndex);
+            float size = fontSize * font.getStringWidth(subString) / 1000;
+            if (size > width) {
+                if (lastSpace < 0){
+                    lastSpace = spaceIndex;
+                }
+                subString = text.substring(0, lastSpace);
+                lines.add(subString);
+                text = text.substring(lastSpace).trim();
+                lastSpace = -1;
+            } else if (spaceIndex == text.length()) {
+                lines.add(text);
+                text = "";
+            } else {
+                lastSpace = spaceIndex;
+            }
+        }
+        return lines;
     }
 
     @Override
