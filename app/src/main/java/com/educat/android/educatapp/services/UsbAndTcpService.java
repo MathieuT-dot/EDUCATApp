@@ -104,6 +104,7 @@ public class UsbAndTcpService extends Service {
 
     private static boolean isRunning = false;
     private static int statusCode = StatusCodes.UTS_NOT_INIT;
+    private boolean newSetupSent = false;
 
     private static int androidAsInstrumentOutputDataType = -1;
     private static int androidAsInstrumentDataIndex = -1;
@@ -185,6 +186,9 @@ public class UsbAndTcpService extends Service {
     private long lastSentCycleCounter = 0;
     private int missingCycleCounters = 0;
     private boolean tcpReadyForData = false;
+    private long logLastCycleCounterInDatabase = 0;
+    private long lastCheckedCycleCounter = 0;
+    private long lastCycleCounter = 0;
 
     private static final int tcpBufferSize = 15000;
     private TcpTelegram[] tcpTelegramsOutput = new TcpTelegram[tcpBufferSize];
@@ -201,11 +205,6 @@ public class UsbAndTcpService extends Service {
     private int delayIndex = 0;
     private Timer reconnectTimer;
     private boolean reconnectDelayInProgress = false;
-
-    private int measurementMode = 0;
-    private static final int START_MEASUREMENT_MODE = 1;
-    private static final int SEND_MEASUREMENT_LIST_MODE = 2;
-    private static final int START_MEASUREMENT_FROM_LIST_MODE = 3;
 
     private int actualSpeedValueIndex = -1;
 
@@ -409,7 +408,7 @@ public class UsbAndTcpService extends Service {
 
         // Create notification default intent.
         Intent intent = new Intent();
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
 
         // Create notification builder.
         NotificationCompat.Builder builder;
@@ -477,6 +476,8 @@ public class UsbAndTcpService extends Service {
             }, 500);
         }
 
+        new Thread(new UIRunnable()).start();
+
         resolveServerIp();
     }
 
@@ -484,8 +485,11 @@ public class UsbAndTcpService extends Service {
 
         MyLog.d(TAG, "Stop foreground service.");
 
+        if (watchDogRunnableActive) {
+            watchDogRunnableActive = false;
+        }
+
         if (isRunning) {
-            MyLog.d(TAG, "stopForegroundService: isRunning = " + isRunning);
             isRunning = false;
             MyLog.d(TAG, "stopForegroundService: isRunning = " + isRunning);
 
@@ -603,17 +607,15 @@ public class UsbAndTcpService extends Service {
                     previousCycleCounter = 0;
                     currentCycleCounter = 1;
                     lastSentCycleCounter = 0;
+                    lastCheckedCycleCounter = 0;
                     missingCycleCounters = 0;
                     tcpReadyForData = false;
                     writeTcpTelegramIndex = 0;
                     readTcpTelegramIndex = 0;
                     streamDataArrayList.clear();
 
-//                    groupedTcpTelegram = new GroupedTcpTelegram();
-
                     manualMeasurement = true;
 
-                    measurementMode = START_MEASUREMENT_MODE;
                     Bundle data = msg.getData();
                     currentUserId = data.getInt("user_id");
                     currentSetupId = data.getInt("setup_id");
@@ -628,22 +630,6 @@ public class UsbAndTcpService extends Service {
                         manualMeasurement = false;
                         sendMessageToUI(MessageCodes.USB_MSG_MANUAL_MEASUREMENT_STOPPED);
                     }
-                    break;
-                case MessageCodes.USB_MSG_SEND_MEASUREMENT_LIST:
-                    measurementMode = SEND_MEASUREMENT_LIST_MODE;
-                    currentUserId = getSharedPreferences(Constants.LOGIN_CACHE, MODE_PRIVATE).getInt("user_id", -1);
-                    if (currentUserId < 0){
-                        MyLog.e(TAG, "Current user ID is not valid (" + currentUserId + ")");
-                        Utilities.displayToast(context, "Current user ID is not valid (" + currentUserId + ")");
-                        break;
-                    }
-                    if (currentSetupId < 0){
-                        MyLog.e(TAG, "Current setup ID is not valid (" + currentSetupId + ")");
-                        Utilities.displayToast(context, "Current setup ID is not valid (" + currentSetupId + ")");
-                        break;
-                    }
-                    localLog(TAG, "Preparing the measurement list");
-                    getMeasurementList();
                     break;
                 case MessageCodes.USB_MSG_STORE_OR_DELETE:
                     if (msg.arg1 == 1 && measurementName != null) {
@@ -910,6 +896,22 @@ public class UsbAndTcpService extends Service {
                                             streamSetup = Utilities.generateStreamSetup(setup);
                                             initSetup();
 
+                                            if (newSetupSent) {
+                                                statusCode = StatusCodes.UTS_NEW_SETUP;
+                                            }
+                                            else if (streamSetup != null) {
+                                                if (streamSetup.isLocked()) {
+                                                    statusCode = StatusCodes.UTS_LOCKED_SETUP;
+                                                }
+                                                else {
+                                                    statusCode = StatusCodes.UTS_UNLOCKED_SETUP;
+                                                }
+                                            }
+                                            else {
+                                                statusCode = StatusCodes.UTS_NO_SETUP;
+                                            }
+                                            sendMessageToUI(MessageCodes.USB_MSG_STATUS_UPDATE);
+
 //                                            if (automaticFlow) {
 //                                                ackExistingConfig();
 //                                            }
@@ -1027,7 +1029,7 @@ public class UsbAndTcpService extends Service {
                                         // check to see if the stream data list is empty
                                         if (streamDataArrayList.size() > 0){
                                             // if the stream data list is not empty, check the last cycle counter in the list, if this is not the current one - 1, add the missing cycle counters first
-                                            long lastCycleCounter = streamDataArrayList.get(streamDataArrayList.size() - 1).getCycleCounter();
+                                            lastCycleCounter = streamDataArrayList.get(streamDataArrayList.size() - 1).getCycleCounter();
                                             lastCycleCounter++;
                                             while (lastCycleCounter < cycleCounter){
                                                 streamDataArrayList.add(
@@ -1202,7 +1204,17 @@ public class UsbAndTcpService extends Service {
                                         new Thread(new WatchdogRunnable()).start();
                                     }
 
-                                    statusCode = StatusCodes.UTS_WATCHDOG;
+                                    if (streamSetup != null) {
+                                        if (streamSetup.isLocked()) {
+                                            statusCode = StatusCodes.UTS_LOCKED_SETUP;
+                                        }
+                                        else {
+                                            statusCode = StatusCodes.UTS_UNLOCKED_SETUP;
+                                        }
+                                    }
+                                    else {
+                                        statusCode = StatusCodes.UTS_NO_SETUP;
+                                    }
                                     sendMessageToUI(MessageCodes.USB_MSG_STATUS_UPDATE);
                                 }
 
@@ -1247,52 +1259,10 @@ public class UsbAndTcpService extends Service {
                                 // DU contains measurement ID (4 bytes)
                                 if (dsap == (byte) 0x20 && ssap == (byte) 0x80){
                                     if (defaultSharedPreferences.getBoolean(Constants.SETTING_SHOW_DETAILED_DATA, false)){
-                                        localLog(TAG, "R: Measurement start asked | UsbTelegram: " + Utilities.bytesToHex(usbTelegramBytes));
+                                        localLog(TAG, "R: Measurement start asked not implemented! | UsbTelegram: " + Utilities.bytesToHex(usbTelegramBytes));
                                     }
                                     else {
-                                        localLog(TAG, "R: Measurement start asked");
-                                    }
-
-                                    measurementId = Utilities.intFromByteArray(du);
-
-                                    if (measurementId > 0){
-
-                                        UsbTelegram newUsbTelegram = new UsbTelegram(UsbTelegram.SD2, boardAddress, ownAddress, (byte) 0x00, (byte) 0x80, (byte) 0x20, new byte[]{});
-                                        byte[] bytes = newUsbTelegram.ConvertToByteArray();
-
-                                        if (uartInterface != null){
-                                            uartInterface.SendData(bytes.length, bytes);
-
-                                            if (defaultSharedPreferences.getBoolean(Constants.SETTING_SHOW_DETAILED_DATA, false)){
-                                                localLog(TAG, "S: Start measurement acknowledged | UsbTelegram: " + Utilities.bytesToHex(bytes));
-                                            }
-                                            else {
-                                                localLog(TAG, "S: Start measurement acknowledged");
-                                            }
-                                        }
-                                        else {
-                                            localLog(TAG, "UART Interface is null!");
-                                        }
-
-                                        previousCycleCounter = 0;
-                                        currentCycleCounter = 1;
-                                        lastSentCycleCounter = 0;
-                                        missingCycleCounters = 0;
-                                        tcpReadyForData = false;
-                                        writeTcpTelegramIndex = 0;
-                                        readTcpTelegramIndex = 0;
-
-//                                        groupedTcpTelegram = new GroupedTcpTelegram();
-
-                                        measurementMode = START_MEASUREMENT_FROM_LIST_MODE;
-
-                                        getMeasurementList();
-                                    }
-                                    else if (measurementId == 0){
-                                        localLog(TAG, "Measurement ID is 0, exception is not yet implemented!");
-                                    }
-                                    else {
-                                        localLog(TAG, "Measurement ID is smaller than 0, exception is not yet implemented!");
+                                        localLog(TAG, "R: Measurement start asked not implemented!");
                                     }
                                 }
 
@@ -1819,6 +1789,10 @@ public class UsbAndTcpService extends Service {
                 calculateParametersForDataStream(setup);
 
                 localLog(TAG, "S: Setup RAW is being sent | Total length: " + bytes.length);
+
+                newSetupSent = true;
+                statusCode = StatusCodes.UTS_NEW_SETUP;
+                sendMessageToUI(MessageCodes.USB_MSG_STATUS_UPDATE);
 
                 prepareBigData256(bytes, (byte) 0x04, (byte) 0x80, 2);
             }
@@ -2759,6 +2733,22 @@ public class UsbAndTcpService extends Service {
                             streamSetup = Utilities.generateStreamSetup(setup);
                             initSetup();
 
+                            if (newSetupSent) {
+                                statusCode = StatusCodes.UTS_NEW_SETUP;
+                            }
+                            else if (streamSetup != null) {
+                                if (streamSetup.isLocked()) {
+                                    statusCode = StatusCodes.UTS_LOCKED_SETUP;
+                                }
+                                else {
+                                    statusCode = StatusCodes.UTS_UNLOCKED_SETUP;
+                                }
+                            }
+                            else {
+                                statusCode = StatusCodes.UTS_NO_SETUP;
+                            }
+                            sendMessageToUI(MessageCodes.USB_MSG_STATUS_UPDATE);
+
 //                            if (automaticFlow) {
 //                                ackExistingConfig();
 //                            }
@@ -2784,238 +2774,6 @@ public class UsbAndTcpService extends Service {
 
         // Adding request to request queue
         AppController.getInstance().addToRequestQueue(strReq, tag_string_req);
-    }
-
-    /**
-     * Creates and executes a request to get the list of measurements.
-     */
-    private void getMeasurementList(){
-        String tag_string_req = "get_measurement_list";
-
-        MyLog.d("StringRequest", PreferenceManager.getDefaultSharedPreferences(AppController.getInstance().getApplicationContext()).getString(Constants.SETTING_SERVER_API_URL, Constants.API_URL) + "measurements/");
-
-        StringRequest strReq = new StringRequest(
-                Request.Method.GET,
-                PreferenceManager.getDefaultSharedPreferences(AppController.getInstance().getApplicationContext()).getString(Constants.SETTING_SERVER_API_URL, Constants.API_URL) + "measurements/",
-                response -> {
-                    LibUtilities.printGiantLog(TAG, "JSON Response: " + response, false);
-                    setupDataEditor.putString("measurement_list_json", response).apply();
-                    parseMeasurementList(response);
-                }, e -> {
-            MyLog.e(TAG, "Volley Error: " + e.toString() + ", " + e.getMessage() + ", " + e.getLocalizedMessage());
-            Utilities.displayVolleyError(context, e);
-        }) {
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String>  headers = new HashMap<>();
-                headers.put("Accept-Language", Locale.getDefault().getLanguage() + "-" + Locale.getDefault().getCountry());
-                headers.put("X-GET-Draft", "0");
-
-                return headers;
-            }
-        };
-
-        // Adding request to request queue
-        AppController.getInstance().addToRequestQueue(strReq, tag_string_req);
-    }
-
-    /**
-     * Parses the JSON string containing the list of measurements.
-     *
-     * @param jsonMeasurementList JSON string containing the list of measurements
-     */
-    private void parseMeasurementList(String jsonMeasurementList){
-
-        measurementArrayList.clear();
-
-        SimpleDateFormat sdfDateAndTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
-        SimpleDateFormat sdfDateAndTimeLaravel = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.getDefault());
-        sdfDateAndTimeLaravel.setTimeZone(TimeZone.getTimeZone("UTC"));
-
-        try {
-            JSONObject jObj = new JSONObject(jsonMeasurementList);
-
-            JSONArray jMeasurementsArray = jObj.getJSONArray("data");
-
-            measurementArrayList = new ArrayList<>();
-            measurementIndex = 0;
-
-            JSONObject currentMeasurement;
-
-            for (int i = 0; i < jMeasurementsArray.length(); i++){
-
-                currentMeasurement = jMeasurementsArray.getJSONObject(i);
-
-                int mMeasurementId = currentMeasurement.getInt("id");
-                int measurementCategoryId = currentMeasurement.getInt("measurement_category_id");
-                int setupId = currentMeasurement.getInt("setup_id");
-                int userId = currentMeasurement.getInt("user_id");
-                String name = currentMeasurement.getString("name_en");
-                String description = currentMeasurement.getString("description_en");
-
-                Integer max;
-                try {
-                    max = currentMeasurement.getInt("max");
-                }
-                catch (JSONException e){
-                    max = null;
-                }
-
-                Integer count;
-                try {
-                    count = currentMeasurement.getInt("count");
-                }
-                catch (JSONException e){
-                    count = null;
-                }
-
-                String stringStartTime = currentMeasurement.getString("started_at");
-                String stringEndTime = currentMeasurement.getString("stopped_at");
-
-                Long startTime = 0L;
-                try {
-                    startTime = sdfDateAndTimeLaravel.parse(stringStartTime).getTime();
-                } catch (ParseException e) {
-                    e.printStackTrace();
-                }
-
-                Long endTime = 0L;
-                try {
-                    endTime = sdfDateAndTimeLaravel.parse(stringEndTime).getTime();
-                } catch (ParseException e) {
-                    e.printStackTrace();
-                }
-
-                try {
-                    stringStartTime = sdfDateAndTime.format(sdfDateAndTimeLaravel.parse(stringStartTime));
-                } catch (ParseException e) {
-                    e.printStackTrace();
-                }
-
-                try {
-                    stringEndTime = sdfDateAndTime.format(sdfDateAndTimeLaravel.parse(stringEndTime));
-                } catch (ParseException e) {
-                    e.printStackTrace();
-                }
-
-                if (measurementMode == SEND_MEASUREMENT_LIST_MODE && currentUserId == userId && currentSetupId == setupId){
-                    measurementArrayList.add(new Measurement(measurementId, measurementCategoryId, setupId, userId, name, description, max, count, startTime, endTime, stringStartTime, stringEndTime));
-                }
-                else if (measurementMode == START_MEASUREMENT_FROM_LIST_MODE && mMeasurementId == measurementId){
-                    measurementArrayList.add(new Measurement(measurementId, measurementCategoryId, setupId, userId, name, description, max, count, startTime, endTime, stringStartTime, stringEndTime));
-                    measurementIndex = measurementArrayList.size() - 1;
-                    break;
-                }
-            }
-
-            if (measurementArrayList.size() > 0){
-
-                if (measurementMode == SEND_MEASUREMENT_LIST_MODE){
-                    selectEligibleMeasurements();
-                }
-                else if (measurementMode == START_MEASUREMENT_FROM_LIST_MODE) {
-                    Measurement measurement = measurementArrayList.get(measurementIndex);
-
-                    currentUserId = measurement.getUserId();
-                    currentSetupId = measurement.getSetupId();
-                    measurementName = measurement.getName();
-                    startTime = measurement.getStartTime();
-                    endTime = measurement.getEndTime();
-
-                    measurementRunning = true;
-
-                    if (manualMeasurement) {
-                        sendMessageToUI(MessageCodes.USB_MSG_MANUAL_MEASUREMENT_STARTED);
-                    }
-
-                    statusCode = StatusCodes.UTS_MEASUREMENT_BUSY;
-                    sendMessageToUI(MessageCodes.USB_MSG_STATUS_UPDATE);
-
-                    tcpConnect("parseMeasurementList");
-                }
-
-            }
-            else {
-                localLog(TAG, "parseMeasurementList: The measurement list on the database is empty!");
-            }
-        }
-        catch (JSONException e){
-            MyLog.e(TAG, "JSONException Error: " + e.toString() + ", " + e.getMessage());
-            Utilities.displayToast(context, "JSONException Error: " + e.toString() + ", " + e.getMessage());
-        }
-    }
-
-    /**
-     * Selects eligible Measurements to be transferred based on the currently logged in user and
-     * the setup that is in the DMU.
-     */
-    private void selectEligibleMeasurements(){
-
-        long currentTimeMillis = System.currentTimeMillis();
-
-        for (int i = measurementArrayList.size() - 1; i >= 0; i--){
-
-            Measurement measurement = measurementArrayList.get(i);
-
-            // remove ineligible measurements from the list (user ID's don't correspond, setup ID's don't correspond, the end time is before the current time)
-            if (measurement.getUserId() != currentUserId || measurement.getSetupId() != currentSetupId || measurement.getEndTime() < currentTimeMillis){
-                measurementArrayList.remove(i);
-            }
-        }
-
-        if (measurementArrayList.size() > 0){
-
-            byte asciiSoh = (byte) 0x01;
-            byte asciiEtx = (byte) 0x03;
-            byte asciiEot = (byte) 0x04;
-
-            int amountOfMeasurements = measurementArrayList.size();
-
-            int duLength = 11 + measurementArrayList.size() * 20 + 2;
-
-            byte[] du = new byte[duLength];
-            int index = 0;
-
-            du[index] = asciiSoh;
-            index += 1;
-            System.arraycopy(ByteBuffer.allocate(4).putInt(currentSetupId).array(), 2, du, index, 2);
-            index += 2;
-            System.arraycopy(ByteBuffer.allocate(4).putInt(currentUserId).array(), 2, du, index, 2);
-            index += 2;
-            System.arraycopy(ByteBuffer.allocate(4).putInt(currentSetupVersion).array(), 2, du, index, 2);
-            index += 2;
-            System.arraycopy(ByteBuffer.allocate(4).putInt(currentUserCompanyId).array(), 2, du, index, 2);
-            index += 2;
-            System.arraycopy(ByteBuffer.allocate(4).putInt(amountOfMeasurements).array(), 2, du, index, 2);
-            index += 2;
-
-            for (int i = 0; i < measurementArrayList.size(); i++){
-                Measurement measurement = measurementArrayList.get(i);
-                System.arraycopy(ByteBuffer.allocate(4).putInt(measurement.getMeasurementId()).array(), 0, du, index, 4);
-                index += 4;
-                System.arraycopy(ByteBuffer.allocate(8).putLong(measurement.getStartTime()).array(), 0, du, index, 8);
-                index += 8;
-                System.arraycopy(ByteBuffer.allocate(8).putLong(measurement.getEndTime()).array(), 0, du, index, 8);
-                index += 8;
-            }
-
-            du[index] = asciiEtx;
-            index += 1;
-            du[index] = asciiEot;
-            index += 1;
-
-            if (index != duLength){
-                MyLog.w(TAG, "selectEligibleMeasurements: Final index is not equal to the DU length");
-            }
-
-            MyLog.d(TAG, "selectEligibleMeasurements: Measurement list: " + Utilities.bytesToHex(du));
-
-            sendMeasurementList(du);
-        }
-        else {
-            MyLog.e(TAG, "No eligible measurements for this user and setup");
-            Utilities.displayToast(context, "No eligible measurements for this user and setup");
-        }
     }
 
     /**
@@ -3571,7 +3329,7 @@ public class UsbAndTcpService extends Service {
                             localLog(TAG, "R: FC 0xD2 contains last cycle counter: " + Utilities.bytesToHex(tcpTelegram.ConvertToByteArray()));
                             // message contains the last cycle counter for logging purposes (every 10000th cycle counter)
 
-                            long logLastCycleCounterInDatabase = Utilities.longFromByteArray(new byte[]{(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, du[0], du[1], du[2], du[3]});
+                            logLastCycleCounterInDatabase = Utilities.longFromByteArray(new byte[]{(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, du[0], du[1], du[2], du[3]});
                             localLog(TAG, "Android processed cycle = " + lastSentCycleCounter + " | Server processed cycle = " + logLastCycleCounterInDatabase);
 
                             break;
@@ -3621,6 +3379,153 @@ public class UsbAndTcpService extends Service {
 
             defaultEditor.putString(Constants.SERVER_API_IP, serverIp).apply();
         });
+    }
+
+    /**
+     * Thread to send UI updates to activities
+     */
+    private class UIRunnable implements Runnable {
+
+        public void run() {
+
+            while (true) {
+
+                try {
+                    Thread.sleep(1000);
+                }
+                catch (InterruptedException e){
+                    // thread is interrupted
+                    return;
+                }
+
+                // Prepare bundle to be sent
+                Bundle b = new Bundle();
+
+                // cycle counter and missing cycle counters
+                if (measurementRunning) {
+                    b.putLong("cycle_counter", currentCycleCounter);
+                    b.putInt("missing_cycle_counters", missingCycleCounters);
+                }
+                else {
+                    b.putLong("cycle_counter", -1);
+                    b.putInt("missing_cycle_counters", -1);
+                }
+
+                // connection status check
+                if (statusCode > 202) {
+                    switch (statusCode) {
+                        case StatusCodes.UTS_MEASUREMENT_BUSY:
+                            // measurement running, check data messages
+                            if (currentCycleCounter > lastCheckedCycleCounter) {
+                                // connection status active
+                                b.putInt("connection_status", StatusCodes.ACTIVE);
+                                lastCheckedCycleCounter = currentCycleCounter;
+                            }
+                            else {
+                                // connection status inactive
+                                b.putInt("connection_status", StatusCodes.INACTIVE);
+                            }
+                            break;
+
+                        case StatusCodes.UTS_STREAM_BUSY:
+                            // stream running, check data messages
+                            if (lastCycleCounter > lastCheckedCycleCounter) {
+                                // connection status active
+                                b.putInt("connection_status", StatusCodes.ACTIVE);
+                                lastCheckedCycleCounter = lastCycleCounter;
+                            }
+                            else {
+                                // connection status inactive
+                                b.putInt("connection_status", StatusCodes.INACTIVE);
+                            }
+                            break;
+
+                        default:
+                            // no measurement or stream running, check watchdog messages
+                            if (System.currentTimeMillis() - lastWatchdogMessage < 500) {
+                                // connection status active
+                                b.putInt("connection_status", StatusCodes.ACTIVE);
+                            }
+                            else {
+                                // connection status inactive
+                                b.putInt("connection_status", StatusCodes.INACTIVE);
+                            }
+                    }
+                }
+                else {
+                    // connection status pending
+                    b.putInt("connection_status", StatusCodes.PENDING);
+                }
+
+                // database connection check
+                if (measurementRunning) {
+                    if (logLastCycleCounterInDatabase != 0) {
+                        if (logLastCycleCounterInDatabase > currentCycleCounter - 2000) {
+                            // database connection active
+                            b.putInt("database_connection", StatusCodes.ACTIVE);
+                        }
+                        else {
+                            // database connection inactive!
+                            b.putInt("database_connection", StatusCodes.INACTIVE);
+                        }
+                    }
+                    else {
+                        if (currentCycleCounter < 2000) {
+                            // database connection pending
+                            b.putInt("database_connection", StatusCodes.PENDING);
+                        }
+                        else {
+                            // database connection inactive!
+                            b.putInt("database_connection", StatusCodes.INACTIVE);
+                        }
+                    }
+                }
+                else {
+                    // database connection unknown
+                    b.putInt("database_connection", StatusCodes.UNKNOWN);
+                }
+
+                // setup info
+                if (setup != null) {
+                    b.putString("setup_name", setup.getName());
+                    b.putInt("setup_id", setup.getId());
+                }
+
+                // measurement info
+                if (measurementName != null && !measurementName.equals("")) {
+                    if (measurementRunning) {
+                        b.putString("measurement_name", measurementName);
+                    }
+                    else {
+                        b.putString("measurement_name", "/");
+                    }
+                }
+                if (measurementId > -1) {
+                    b.putInt("measurement_id", measurementId);
+                }
+
+                // Loop through all registered clients from back to front
+                for (int i = mClients.size() - 1; i >= 0; i--){
+                    try {
+                        // Prepare data to be sent
+                        Message msg = Message.obtain(null, MessageCodes.USB_MSG_UI_FEEDBACK);
+                        msg.setData(b);
+
+                        // Send the data to the client.
+                        try {
+                            mClients.get(i).send(msg);
+                        }
+                        catch (IndexOutOfBoundsException e) {
+
+                        }
+                    }
+                    catch (RemoteException e){
+                        // The client is dead. Remove it from the list; we are going through the list from back to front so this is safe to do inside the loop.
+                        mClients.remove(i);
+                    }
+                }
+            }
+        }
     }
 
     /**

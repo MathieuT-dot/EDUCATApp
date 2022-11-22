@@ -310,12 +310,19 @@ public class SetupInfoActivity extends AppCompatActivity {
 
         }
 
+        // Uncomment to display the raw format of the setup at the bottom of the screen (bonus: clicking the raw format loads the setup in memory)
         if (getSharedPreferences(Constants.PERMISSIONS_CACHE, MODE_PRIVATE).getBoolean(Constants.PERMISSION_DEBUG_CONSOLE, false)) {
             // Setup
             View rawInflatedLayout = inflater.inflate(R.layout.linear_layout_setup_info, null);
             ((TextView) rawInflatedLayout.findViewById(R.id.text_view_top)).setText("RAW");
             ((TextView) rawInflatedLayout.findViewById(R.id.text_view_bottom)).setText(Utilities.bytesToHex(Utilities.convertSetupToRawData(context, setup)));
             (rawInflatedLayout.findViewById(R.id.info_image_view)).setVisibility(View.GONE);
+
+            rawInflatedLayout.setOnClickListener(v -> {
+                setupEditor.putString("setup_in_memory", stringJsonResponse).apply();
+                Utilities.displayToast(context, "Setup loaded in memory!");
+            });
+
             setupLinearLayout.addView(rawInflatedLayout);
         }
 
@@ -340,123 +347,125 @@ public class SetupInfoActivity extends AppCompatActivity {
 
                 if (parameter.getId() == Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE){
 
-                    switch (Float.floatToIntBits(parameter.getValue())){
+                    if (parameter.getValue() != null) {
+                        switch (Float.floatToIntBits(parameter.getValue())){
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_NONE:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_NONE);
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_NONE:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_NONE);
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_JOYSTICK_DX2_OUTPUT_0XA1:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_JOYSTICK_DX2_OUTPUT_0XA1);
-                            dataLength += 5;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_JOYSTICK_DX2_OUTPUT_0XA1:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_JOYSTICK_DX2_OUTPUT_0XA1);
+                                dataLength += 5;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_JOYSTICK_PG_OUTPUT_0XA2:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_JOYSTICK_PG_OUTPUT_0XA2);
-                            dataLength += 6;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_JOYSTICK_PG_OUTPUT_0XA2:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_JOYSTICK_PG_OUTPUT_0XA2);
+                                dataLength += 6;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_JOYSTICK_LINX_OUTPUT_0XA3:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_JOYSTICK_LINX_OUTPUT_0XA3);
-                            dataLength += 5;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_JOYSTICK_LINX_OUTPUT_0XA3:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_JOYSTICK_LINX_OUTPUT_0XA3);
+                                dataLength += 5;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_IMU_9AXIS_ROT_VEC_0XB1:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_IMU_9AXIS_ROT_VEC_0XB1);
-                            dataLength += 26;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_IMU_9AXIS_ROT_VEC_0XB1:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_IMU_9AXIS_ROT_VEC_0XB1);
+                                dataLength += 26;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_IMU_6AXIS_0XB2:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_IMU_6AXIS_0XB2);
-                            dataLength += 12;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_IMU_6AXIS_0XB2:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_IMU_6AXIS_0XB2);
+                                dataLength += 12;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_GPS_MIN_DATA_0XC1:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_GPS_MIN_DATA_0XC1);
-                            dataLength += 17;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_GPS_MIN_DATA_0XC1:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_GPS_MIN_DATA_0XC1);
+                                dataLength += 17;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_GPS_STATUS_0XC2:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_GPS_STATUS_0XC2);
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_GPS_STATUS_0XC2:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_GPS_STATUS_0XC2);
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_GPS_DATA_STATUS_0XC3:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_GPS_DATA_STATUS_0XC3);
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_GPS_DATA_STATUS_0XC3:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_GPS_DATA_STATUS_0XC3);
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D1_0XD1__US:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D1_0XD1__US);
-                            dataLength += 2;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D1_0XD1__US:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D1_0XD1__US);
+                                dataLength += 2;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D2_0XD2__IR:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D2_0XD2__IR);
-                            dataLength += 1;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D2_0XD2__IR:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D2_0XD2__IR);
+                                dataLength += 1;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D3_0XD3__US_IR:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D3_0XD3__US_IR);
-                            dataLength += 5;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D3_0XD3__US_IR:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D3_0XD3__US_IR);
+                                dataLength += 5;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D4_0XD4__US_2IR:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D4_0XD4__US_2IR);
-                            dataLength += 6;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D4_0XD4__US_2IR:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D4_0XD4__US_2IR);
+                                dataLength += 6;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D5_0XD5__US_3IR:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D5_0XD5__US_3IR);
-                            dataLength += 7;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D5_0XD5__US_3IR:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D5_0XD5__US_3IR);
+                                dataLength += 7;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D6_0XD6__4IR:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D6_0XD6__4IR);
-                            dataLength += 6;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D6_0XD6__4IR:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D6_0XD6__4IR);
+                                dataLength += 6;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D7_0XD7__4IR_ONLY_CALCULATED_VALUE:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D7_0XD7__4IR_ONLY_CALCULATED_VALUE);
-                            dataLength += 2;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D7_0XD7__4IR_ONLY_CALCULATED_VALUE:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D7_0XD7__4IR_ONLY_CALCULATED_VALUE);
+                                dataLength += 2;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D8_0XD8__US_3IR_ONLY_CALCULATED_VALUE:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D8_0XD8__US_3IR_ONLY_CALCULATED_VALUE);
-                            dataLength += 2;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D8_0XD8__US_3IR_ONLY_CALCULATED_VALUE:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_CAN_DISTANCE_NODES_D8_0XD8__US_3IR_ONLY_CALCULATED_VALUE);
+                                dataLength += 2;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_REAL_TIME_CLOCK_RTC__0XE1:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_REAL_TIME_CLOCK_RTC__0XE1);
-                            dataLength += 8;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_REAL_TIME_CLOCK_RTC__0XE1:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_REAL_TIME_CLOCK_RTC__0XE1);
+                                dataLength += 8;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_USB_AD_AS_INSTRUMENT_0XF1:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_USB_AD_AS_INSTRUMENT_0XF1);
-                            dataLength += 2;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_USB_AD_AS_INSTRUMENT_0XF1:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_USB_AD_AS_INSTRUMENT_0XF1);
+                                dataLength += 2;
+                                dataLength++;
+                                break;
 
-                        case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_USB_AD_AS_INSTRUMENT__SENSOR_ACTIVATE_BITS_0XF2:
-                            dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_USB_AD_AS_INSTRUMENT__SENSOR_ACTIVATE_BITS_0XF2);
-                            dataLength += 3;
-                            dataLength++;
-                            break;
+                            case (int) Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_USB_AD_AS_INSTRUMENT__SENSOR_ACTIVATE_BITS_0XF2:
+                                dataOrder.add(Constants.SETUP_PRM_DATA_OUTPUT_DATATYPE_option_USB_AD_AS_INSTRUMENT__SENSOR_ACTIVATE_BITS_0XF2);
+                                dataLength += 3;
+                                dataLength++;
+                                break;
 
-                        default:
+                            default:
+                        }
                     }
                 }
             }

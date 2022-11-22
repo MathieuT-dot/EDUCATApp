@@ -3,8 +3,25 @@
   <component name="DesignSurface">
     <option name="filePathToZoomLevelMap">
       <map>
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/drawable/bg_gradient.xml" value="0.3828125" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/drawable/ic_educat_image.xml" value="0.3828125" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/drawable/ic_educat_splash_icon.xml" value="0.3828125" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/drawable/splash_background.xml" value="0.3828125" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/drawable/splash_inset.xml" value="0.221875" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/layout/activity_about.xml" value="0.27309782608695654" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/layout/activity_control_panel.xml" value="0.27445652173913043" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/layout/activity_main.xml" value="0.13518518518518519" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/layout/activity_setup_drag_and_drop.xml" value="0.25769927536231885" />
         <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/layout/activity_submitted_questionnaires.xml" value="0.36820652173913043" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/layout/activity_usb.xml" value="0.27445652173913043" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/menu/menu_control_panel.xml" value="0.1" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/menu/menu_setup_list.xml" value="0.36666666666666664" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/menu/menu_sort_and_refresh.xml" value="0.36666666666666664" />
         <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/menu/menu_submitted_questionnaires.xml" value="0.3776041666666667" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml" value="0.3828125" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml" value="0.3828125" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/mipmap-anydpi-v26/splash_icon.xml" value="0.221875" />
+        <entry key="..\:/Users/Mathieu/AndroidStudioProjects/EDUCATApp/app/src/main/res/xml/preferences.xml" value="0.1" />
       </map>
     </option>
   </component>
@@ -123,7 +140,7 @@
       </value>
     </option>
   </component>
-  <component name="ProjectRootManager" version="2" languageLevel="JDK_11" default="true" project-jdk-name="1.8" project-jdk-type="JavaSDK">
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_11" default="true" project-jdk-name="11" project-jdk-type="JavaSDK">
     <output url="file://$PROJECT_DIR$/build/classes" />
   </component>
   <component name="ProjectType">

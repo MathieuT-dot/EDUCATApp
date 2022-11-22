@@ -75,9 +75,6 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Simple
             CheckBoxPreference preferenceQnrDraftSubmit = (CheckBoxPreference) findPreference(Constants.SETTING_QNR_DRAFT_SUBMIT);
             CheckBoxPreference preferenceAutomaticUsbComm = (CheckBoxPreference) findPreference(Constants.SETTING_AUTOMATIC_USB_COMMUNICATION);
             CheckBoxPreference preferenceHideUnchangeableParameters = (CheckBoxPreference) findPreference(Constants.SETTING_HIDE_UNCHANGEABLE_PARAMETERS);
-            EditTextPreference preferenceServerApiUrl = (EditTextPreference) findPreference(Constants.SETTING_SERVER_API_URL);
-            CheckBoxPreference preferenceServerCustomUrl = (CheckBoxPreference) findPreference(Constants.SETTING_SERVER_CUSTOM_URL);
-            CheckBoxPreference preferenceServerDeveloperUrl = (CheckBoxPreference) findPreference(Constants.SETTING_SERVER_DEVELOPER_URL);
 
             SharedPreferences permissionsSharedPreferences;
 
@@ -153,18 +150,6 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Simple
 
                 if (preferenceHideUnchangeableParameters != null && (!permissionsSharedPreferences.getBoolean(Constants.PERMISSION_SETUP_CREATE, false) || !MainActivity.loggedIn)) {
                     preferenceScreen.removePreference(preferenceHideUnchangeableParameters);
-                }
-
-                if (preferenceServerApiUrl != null && (!permissionsSharedPreferences.getBoolean(Constants.PERMISSION_DEBUG_CONSOLE, false) || !MainActivity.loggedIn)) {
-                    preferenceScreen.removePreference(preferenceServerApiUrl);
-                }
-
-                if (preferenceServerCustomUrl != null && (!permissionsSharedPreferences.getBoolean(Constants.PERMISSION_DEBUG_CONSOLE, false) || !MainActivity.loggedIn)) {
-                    preferenceScreen.removePreference(preferenceServerCustomUrl);
-                }
-
-                if (preferenceServerDeveloperUrl != null && (!permissionsSharedPreferences.getBoolean(Constants.PERMISSION_DEBUG_CONSOLE, false) || !MainActivity.loggedIn)) {
-                    preferenceScreen.removePreference(preferenceServerDeveloperUrl);
                 }
             }
         }

@@ -58,6 +58,8 @@ public class MeasurementMenuActivity extends AppCompatActivity implements Simple
     private final Context context = this;
     private ProgressDialog pDialog;
 
+    private SharedPreferences defaultSharedPreferences;
+
     private Messenger mService = null;
     private boolean mIsBound;
     private final Messenger mMessenger = new Messenger(new IncomingHandler());
@@ -94,6 +96,8 @@ public class MeasurementMenuActivity extends AppCompatActivity implements Simple
         // Progress dialog
         pDialog = new ProgressDialog(this);
         pDialog.setCancelable(false);
+
+        defaultSharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
 
         setupSharedPreferences = getSharedPreferences(Constants.SETUP_DATA, MODE_PRIVATE);
         jsonTypeInfoList = setupSharedPreferences.getString(Constants.API_INSTRUMENT_TYPES, "");
@@ -418,35 +422,57 @@ public class MeasurementMenuActivity extends AppCompatActivity implements Simple
 
     private void updateUi() {
         if (UsbAndTcpService.isRunning()) {
-            switch (UsbAndTcpService.getStatusCode()) {
-                case StatusCodes.UTS_NOT_INIT:
-                    startNewMeasurementButton.setEnabled(false);
-                    stopCurrentMeasurementButton.setEnabled(false);
-                    break;
-                case StatusCodes.UTS_INIT:
-                    startNewMeasurementButton.setEnabled(false);
-                    stopCurrentMeasurementButton.setEnabled(false);
-                    break;
-                case StatusCodes.UTS_ADDRESS:
-                    startNewMeasurementButton.setEnabled(true);
-                    stopCurrentMeasurementButton.setEnabled(false);
-                    break;
-                case StatusCodes.UTS_WATCHDOG:
-                    startNewMeasurementButton.setEnabled(true);
-                    stopCurrentMeasurementButton.setEnabled(false);
-                    break;
-                case StatusCodes.UTS_NO_SETUP:
-                    startNewMeasurementButton.setEnabled(false);
-                    stopCurrentMeasurementButton.setEnabled(false);
-                    break;
-                case StatusCodes.UTS_STREAM_BUSY:
-                    startNewMeasurementButton.setEnabled(false);
-                    stopCurrentMeasurementButton.setEnabled(false);
-                    break;
-                case StatusCodes.UTS_MEASUREMENT_BUSY:
-                    startNewMeasurementButton.setEnabled(false);
-                    stopCurrentMeasurementButton.setEnabled(true);
-                    break;
+            if (defaultSharedPreferences.getBoolean(Constants.SETTING_ONLY_ENABLE_RELEVANT_BUTTONS, true)) {
+                switch (UsbAndTcpService.getStatusCode()) {
+                    case StatusCodes.UTS_NOT_INIT:
+                        startNewMeasurementButton.setEnabled(false);
+                        stopCurrentMeasurementButton.setEnabled(false);
+                        break;
+                    case StatusCodes.UTS_INIT:
+                        startNewMeasurementButton.setEnabled(false);
+                        stopCurrentMeasurementButton.setEnabled(false);
+                        break;
+                    case StatusCodes.UTS_ADDRESS:
+                        startNewMeasurementButton.setEnabled(false);
+                        stopCurrentMeasurementButton.setEnabled(false);
+                        break;
+                    case StatusCodes.UTS_WATCHDOG:
+                        startNewMeasurementButton.setEnabled(false);
+                        stopCurrentMeasurementButton.setEnabled(false);
+                        break;
+                    case StatusCodes.UTS_NO_SETUP:
+                        startNewMeasurementButton.setEnabled(false);
+                        stopCurrentMeasurementButton.setEnabled(false);
+                        break;
+                    case StatusCodes.UTS_UNLOCKED_SETUP:
+                        startNewMeasurementButton.setEnabled(false);
+                        stopCurrentMeasurementButton.setEnabled(false);
+                        break;
+                    case StatusCodes.UTS_LOCKED_SETUP:
+                        startNewMeasurementButton.setEnabled(true);
+                        stopCurrentMeasurementButton.setEnabled(false);
+                        break;
+                    case StatusCodes.UTS_STREAM_BUSY:
+                        startNewMeasurementButton.setEnabled(false);
+                        stopCurrentMeasurementButton.setEnabled(false);
+                        break;
+                    case StatusCodes.UTS_MEASUREMENT_BUSY:
+                        startNewMeasurementButton.setEnabled(false);
+                        stopCurrentMeasurementButton.setEnabled(true);
+                        break;
+                    case StatusCodes.UTS_NEW_SETUP:
+                        startNewMeasurementButton.setEnabled(false);
+                        stopCurrentMeasurementButton.setEnabled(false);
+                        break;
+                    default:
+                        startNewMeasurementButton.setEnabled(true);
+                        stopCurrentMeasurementButton.setEnabled(true);
+                        break;
+                }
+            }
+            else {
+                startNewMeasurementButton.setEnabled(true);
+                stopCurrentMeasurementButton.setEnabled(true);
             }
         }
         else {

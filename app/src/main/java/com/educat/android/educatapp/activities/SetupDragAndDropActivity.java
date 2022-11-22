@@ -1,18 +1,33 @@
 package com.educat.android.educatapp.activities;
 
 import android.app.ActionBar;
+import android.app.Activity;
 import android.app.ProgressDialog;
 import android.content.ClipData;
 import android.content.ClipDescription;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.content.res.TypedArray;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Outline;
+import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.MediaStore;
+import android.text.TextPaint;
 import android.util.DisplayMetrics;
 import android.view.DragEvent;
 import android.view.Gravity;
@@ -43,17 +58,32 @@ import com.educat.android.educatapp.setups.Parameter;
 import com.educat.android.educatapp.setups.Setup;
 import com.kuleuven.android.kuleuvenlibrary.LibUtilities;
 import com.kuleuven.android.kuleuvenlibrary.setupClasses.Snap;
+import com.tom_roush.pdfbox.pdmodel.PDDocument;
+import com.tom_roush.pdfbox.pdmodel.PDPage;
+import com.tom_roush.pdfbox.pdmodel.PDPageContentStream;
+import com.tom_roush.pdfbox.pdmodel.common.PDRectangle;
+import com.tom_roush.pdfbox.pdmodel.font.PDFont;
+import com.tom_roush.pdfbox.pdmodel.font.PDType1Font;
+import com.tom_roush.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import com.tom_roush.pdfbox.util.PDFBoxResourceLoader;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import eltos.simpledialogfragment.SimpleDialog;
 
@@ -112,6 +142,25 @@ public class SetupDragAndDropActivity extends AppCompatActivity implements View.
     private static final String QUIT_DIALOG = "dialogTagQuit";
     private static final String LOCK_SETUP_DIALOG = "dialogTagLockSetup";
 
+    private PDDocument document;
+    private PDPage page;
+    private PDPageContentStream contentStream;
+    private float width;
+    private float startY;
+    private float endY;
+    private float heightCounter;
+    private float currentXPosition;
+    private float wrapOffsetY;
+
+    private boolean downloadingAllPdfs = false;
+    private ArrayList<Integer> setupIdArrayList;
+    private int downloadPdfIndex;
+    private int requestErrors = 0;
+    private List<Integer> requestErrorIds = new ArrayList<>();
+    private int pdfErrors = 0;
+    private List<Integer> pdfErrorIds = new ArrayList<>();
+    private int setupId;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -145,6 +194,16 @@ public class SetupDragAndDropActivity extends AppCompatActivity implements View.
             oldSetup = savedInstanceState.getParcelable("STATE_OLD_SETUP");
             jsonSetup = savedInstanceState.getString("STATE_JSON_SETUP");
             addDragViewsFromSetup();
+        }
+        else if (getIntent().hasExtra("DOWNLOAD_PDF_IDS")) {
+            downloadingAllPdfs = true;
+            setupIdArrayList = getIntent().getIntegerArrayListExtra("DOWNLOAD_PDF_IDS");
+            if (setupIdArrayList != null) {
+                downloadPdfIndex = 0;
+                pDialog.setMessage("Downloading all pdf files (" + (downloadPdfIndex + 1) + "/" + setupIdArrayList.size() + ")");
+                showDialog();
+                downloadAllPdfFiles();
+            }
         }
         else {
             int setupId = getIntent().getIntExtra("SETUP_ID", 0);
@@ -334,8 +393,10 @@ public class SetupDragAndDropActivity extends AppCompatActivity implements View.
     private void getSetupById(final int setupId) {
         String tag_string_req = "get_setup";
 
-        pDialog.setMessage(getString(R.string.getting_selected_setup_ellipsis));
-        showDialog();
+        if (!downloadingAllPdfs) {
+            pDialog.setMessage(getString(R.string.getting_selected_setup_ellipsis));
+            showDialog();
+        }
 
         MyLog.d("StringRequest", PreferenceManager.getDefaultSharedPreferences(AppController.getInstance().getApplicationContext()).getString(Constants.SETTING_SERVER_API_URL, Constants.API_URL) + "setups/" + setupId + "/");
 
@@ -356,8 +417,18 @@ public class SetupDragAndDropActivity extends AppCompatActivity implements View.
                     prepareSetup();
                 }, e -> {
             MyLog.e(TAG, "Volley Error: " + e.toString() + ", " + e.getMessage() + ", " + e.getLocalizedMessage());
-            hideDialog();
-            Utilities.displayVolleyError(context, e);
+
+            if (!downloadingAllPdfs) {
+                hideDialog();
+                Utilities.displayVolleyError(context, e);
+            }
+            else {
+                requestErrors++;
+                requestErrorIds.add(setupId);
+
+                downloadPdfIndex++;
+                downloadAllPdfFiles();
+            }
         }) {
             @Override
             public Map<String, String> getHeaders() {
@@ -435,7 +506,12 @@ public class SetupDragAndDropActivity extends AppCompatActivity implements View.
             addDragViewsFromSetup();
         }
 
-        hideDialog();
+        if (!downloadingAllPdfs) {
+            hideDialog();
+        }
+        else {
+            new Handler(Looper.getMainLooper()).postDelayed(this::createPdfFile, 100);
+        }
     }
 
     /**
@@ -816,36 +892,41 @@ public class SetupDragAndDropActivity extends AppCompatActivity implements View.
     @Override
     public void onBackPressed() {
 
-        if (setup.isLocked()){
-            finish();
-        }
-        else if (createListOfChangedInstruments()){
-            SimpleDialog.build()
-                    .title(R.string.save_changes)
-                    .msg(R.string.quit_save_changes)
-                    .pos(R.string.yes)
-                    .neg(R.string.no)
-                    .neut(R.string.cancel)
-                    .cancelable(false)
-                    .show(this, SAVE_CHANGES_DIALOG);
-        } else if (createListOfDeletedInstruments()){
-            SimpleDialog.build()
-                    .title(R.string.save_changes)
-                    .msg(R.string.quit_save_changes)
-                    .pos(R.string.yes)
-                    .neg(R.string.no)
-                    .neut(R.string.cancel)
-                    .cancelable(false)
-                    .show(this, SAVE_CHANGES_DIALOG);
+        if (setup != null) {
+            if (setup.isLocked()){
+                finish();
+            }
+            else if (createListOfChangedInstruments()){
+                SimpleDialog.build()
+                        .title(R.string.save_changes)
+                        .msg(R.string.quit_save_changes)
+                        .pos(R.string.yes)
+                        .neg(R.string.no)
+                        .neut(R.string.cancel)
+                        .cancelable(false)
+                        .show(this, SAVE_CHANGES_DIALOG);
+            } else if (createListOfDeletedInstruments()){
+                SimpleDialog.build()
+                        .title(R.string.save_changes)
+                        .msg(R.string.quit_save_changes)
+                        .pos(R.string.yes)
+                        .neg(R.string.no)
+                        .neut(R.string.cancel)
+                        .cancelable(false)
+                        .show(this, SAVE_CHANGES_DIALOG);
+            }
+            else {
+                SimpleDialog.build()
+                        .title(R.string.quit)
+                        .msg(R.string.quit_setup_screen)
+                        .pos(R.string.yes)
+                        .neg(R.string.no)
+                        .cancelable(false)
+                        .show(this, QUIT_DIALOG);
+            }
         }
         else {
-            SimpleDialog.build()
-                    .title(R.string.quit)
-                    .msg(R.string.quit_setup_screen)
-                    .pos(R.string.yes)
-                    .neg(R.string.no)
-                    .cancelable(false)
-                    .show(this, QUIT_DIALOG);
+            finish();
         }
     }
 
@@ -1701,6 +1782,395 @@ public class SetupDragAndDropActivity extends AppCompatActivity implements View.
 
         // Adding request to request queue
         AppController.getInstance().addToRequestQueue(strReq, tag_string_req);
+    }
+
+    private void downloadAllPdfFiles() {
+        clearSetup();
+        if (downloadPdfIndex < setupIdArrayList.size()) {
+            pDialog.setMessage("Downloading all pdf files (" + (downloadPdfIndex + 1) + "/" + setupIdArrayList.size() + ")");
+            MyLog.d(TAG, "Downloading all pdf files (" + (downloadPdfIndex + 1) + "/" + setupIdArrayList.size() + ")");
+            setupId = setupIdArrayList.get(downloadPdfIndex);
+            if (setupId > 0) {
+                new Timer().schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        getSetupById(setupId);
+                    }
+                }, 100);
+            }
+            else {
+                downloadPdfIndex++;
+                downloadAllPdfFiles();
+            }
+        }
+        else {
+            hideDialog();
+
+            MyLog.d(TAG, "requestErrors: " + requestErrors);
+            for (int i = 0; i < requestErrorIds.size(); i++) {
+                MyLog.d(TAG, "requestError ID " + (i+1) + ": " + requestErrorIds.get(i));
+            }
+            MyLog.d(TAG, "pdfErrors: " + pdfErrors);
+            for (int i = 0; i < pdfErrorIds.size(); i++) {
+                MyLog.d(TAG, "pdfError ID " + (i+1) + ": " + pdfErrorIds.get(i));
+            }
+
+            runOnUiThread(() -> Utilities.displayToast(context, "Downloading PDF files completed (Request errors: " + requestErrors + " | PDF errors: " + pdfErrors + ")"));
+        }
+    }
+
+    /**
+     * Creates and outputs the PDF file.
+     */
+    private void createPdfFile() {
+
+        // Enable Android asset loading
+        PDFBoxResourceLoader.init(getApplicationContext());
+
+        document = new PDDocument();
+        page = new PDPage(PDRectangle.A4);
+        document.addPage(page);
+
+        PDRectangle mediaBox = page.getMediaBox();
+        float marginY = 80;
+        float marginX = 60;
+        width = mediaBox.getWidth() - 2 * marginX;
+        float startX = mediaBox.getLowerLeftX() + marginX;
+        float endX = mediaBox.getUpperRightX() - marginX;
+        startY = mediaBox.getUpperRightY() - marginY;
+        endY = mediaBox.getLowerLeftY() + marginY;
+        heightCounter = startY;
+        currentXPosition = 0;
+
+        float smallOffsetY = 8;
+        float normalOffsetY = 20;
+        wrapOffsetY = 2;
+
+        Paint titleTextPaint = new TextPaint();
+        float titleFontSize = 20;
+        titleTextPaint.setTextSize(titleFontSize);
+        titleTextPaint.setTypeface(Typeface.create("Helvetica", Typeface.BOLD));
+        Paint.FontMetrics titleFontMetrics = titleTextPaint.getFontMetrics();
+        float titleFontHeight = titleFontMetrics.descent - titleFontMetrics.ascent;
+
+        Paint defaultTextPaint = new TextPaint();
+        float defaultFontSize = 12;
+        defaultTextPaint.setTextSize(defaultFontSize);
+        defaultTextPaint.setTypeface(Typeface.create("Helvetica", Typeface.NORMAL));
+        Paint.FontMetrics defaultFontMetrics = defaultTextPaint.getFontMetrics();
+        float defaultFontHeight = defaultFontMetrics.descent - defaultFontMetrics.ascent;
+
+        Paint smallTextPaint = new TextPaint();
+        float smallFontSize = 10;
+        smallTextPaint.setTextSize(smallFontSize);
+        smallTextPaint.setTypeface(Typeface.create("Helvetica", Typeface.NORMAL));
+        Paint.FontMetrics smallFontMetrics = smallTextPaint.getFontMetrics();
+        float smallFontHeight = smallFontMetrics.descent - defaultFontMetrics.ascent;
+
+        // Create font objects
+        PDFont titleFont = PDType1Font.HELVETICA_BOLD;
+        PDFont defaultFont = PDType1Font.HELVETICA;
+
+
+        try {
+            // Define a content stream for adding to the PDF
+            contentStream = new PDPageContentStream(document, page);
+
+            // Load in logo
+            InputStream in = getAssets().open("educat_logo_small.png");
+
+            // Draw the logo
+            Bitmap bitmap = BitmapFactory.decodeStream(in);
+            PDImageXObject xImage = LosslessFactory.createFromImage(document, bitmap);
+            contentStream.drawImage(xImage, endX - 125, startY - 78, 125, 78);
+
+            // Write title
+            contentStream.beginText();
+
+            addParagraph(startX, 0, true, titleFont, titleFontSize, titleFontHeight, setup.getName(), width - 148);
+
+            // Write setup details
+            addParagraph(startX + 5, wrapOffsetY, defaultFont, defaultFontSize, defaultFontHeight, getString(R.string.id_colon) + setup.getId());
+            addParagraph(startX + 5, wrapOffsetY, defaultFont, defaultFontSize, defaultFontHeight, getString(R.string.hardware_identifier_colon) + setup.getHardwareIdentifier());
+            addParagraph(startX + 5, wrapOffsetY, defaultFont, defaultFontSize, defaultFontHeight, getString(R.string.version_colon) + setup.getVersion());
+            addParagraph(startX + 5, wrapOffsetY, defaultFont, defaultFontSize, defaultFontHeight, getString(R.string.locked_colon) + setup.isLocked());
+
+            // Print setup image
+            addParagraph(startX, normalOffsetY + 300 - titleFontHeight, titleFont, titleFontSize, titleFontHeight, " ");
+            contentStream.endText();
+
+            ImageView wheelchairImageView = findViewById(R.id.imageView);
+
+            Bitmap wheelchairBitmap = getBitmapFromView(wheelchairImageView);
+            PDImageXObject xImageWheelchair = LosslessFactory.createFromImage(document, wheelchairBitmap);
+            contentStream.drawImage(xImageWheelchair, startX, heightCounter, 300, 300);
+
+            Bitmap gridParentBitmap = getBitmapFromView(gridParent);
+            PDImageXObject xImageGridParent = LosslessFactory.createFromImage(document, gridParentBitmap);
+            contentStream.drawImage(xImageGridParent, startX, heightCounter, 300, 300);
+
+            if (dragViewContainer.getChildCount() > 0) {
+                Bitmap dragViewParentBitmap = getBitmapFromView(dragViewParent);
+                PDImageXObject xImageDragViewParent = LosslessFactory.createFromImage(document, dragViewParentBitmap);
+                contentStream.drawImage(xImageDragViewParent, startX, heightCounter - 20, 300, 30);
+            }
+
+            if (floatingContainer.getChildCount() > 0) {
+                Bitmap floatingParentBitmap = getBitmapFromView(floatingParent);
+                PDImageXObject xImageFloatingParent = LosslessFactory.createFromImage(document, floatingParentBitmap);
+                contentStream.drawImage(xImageFloatingParent, startX, heightCounter + 270, 300, 30);
+            }
+
+            contentStream.beginText();
+            addParagraph(startX, -defaultFontHeight, true, titleFont, titleFontSize, titleFontHeight, " ");
+
+            // Write instruments with type and parameters
+            Instrument instrument;
+            Parameter parameter;
+
+            for (int i = 0; i < setup.getInstrumentArrayList().size(); i++) {
+
+                instrument = setup.getInstrumentArrayList().get(i);
+
+                addParagraph(startX, normalOffsetY, defaultFont, defaultFontSize, defaultFontHeight, getString(R.string.instrument));
+                addParagraph(startX + 5, wrapOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.name_colon) + instrument.getName());
+                addParagraph(startX + 5, wrapOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.id_colon) + instrument.getId());
+                if (!instrument.getDescription().equals("")) {
+                    addParagraph(startX + 5, wrapOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.description_colon) + instrument.getDescription());
+                }
+
+                addParagraph(startX + 20, smallOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.type));
+                addParagraph(startX + 25, wrapOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.name_colon) + instrument.getType().getName());
+                addParagraph(startX + 25, wrapOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.id_colon) + instrument.getType().getId());
+                addParagraph(startX + 25, wrapOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.category_colon) + instrument.getType().getCategory());
+                if (!instrument.getType().getDescription().equals("")) {
+                    addParagraph(startX + 25, wrapOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.description_colon) + instrument.getType().getDescription());
+                }
+
+                for (int j = 0; j < instrument.getParameterArrayList().size(); j++) {
+
+                    parameter = instrument.getParameterArrayList().get(j);
+
+                    addParagraph(startX + 20, smallOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.parameter));
+                    addParagraph(startX + 25, wrapOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.name_colon) + parameter.getName());
+                    addParagraph(startX + 25, wrapOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.id_colon) + parameter.getId());
+                    addParagraph(startX + 25, wrapOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.value_colon) + parameter.getValue());
+                    if (!parameter.getValueDescription().equals("")) {
+                        addParagraph(startX + 25, wrapOffsetY, defaultFont, smallFontSize, smallFontHeight, getString(R.string.value_description_colon) + parameter.getValueDescription());
+                    }
+                }
+            }
+
+            contentStream.endText();
+
+            contentStream.close();
+
+            // Adding page numbers to the whole document
+            int pageCount = document.getNumberOfPages();
+            for (int i = 0; i < pageCount; i++) {
+                String pageNumberString = (i + 1) + " / " + pageCount;
+                float size = defaultFontSize * defaultFont.getStringWidth(pageNumberString) / 1000;
+                page = document.getPage(i);
+                contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true);
+                contentStream.beginText();
+                contentStream.setFont(defaultFont, defaultFontSize);
+                contentStream.newLineAtOffset(endX + marginX - endY + defaultFontHeight - size, endY - defaultFontHeight);
+                contentStream.showText(pageNumberString);
+                contentStream.endText();
+                contentStream.close();
+            }
+
+            // Make sure that the content stream is closed:
+            contentStream.close();
+
+            OutputStream outputStream;
+
+            String name = setup.getId() + "_" + setup.getName() + ".pdf";
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MyLog.d(TAG, "MediaStore used");
+                ContentResolver resolver = context.getContentResolver();
+                ContentValues contentValues = new ContentValues();
+                contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+                contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf");
+                contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS);
+                Uri uri = resolver.insert(MediaStore.Files.getContentUri("external"), contentValues);
+                if (uri != null) {
+                    outputStream = getContentResolver().openOutputStream(uri);
+                    if (outputStream != null) {
+                        document.save(outputStream);
+                        outputStream.close();
+                        document.close();
+                    }
+                }
+            }
+
+            downloadPdfIndex++;
+            downloadAllPdfFiles();
+        } catch (IOException e) {
+            e.printStackTrace();
+
+            pdfErrors++;
+            pdfErrorIds.add(setupId);
+
+            downloadPdfIndex++;
+            downloadAllPdfFiles();
+        }
+    }
+
+    private void clearSetup() {
+        dragViewContainer.removeAllViews();
+        floatingContainer.removeAllViews();
+        for (Snap s : targetSnaps) {
+            s.removeAllViews();
+        }
+    }
+
+    /**
+     * Adds one or multiple lines of text to the PDF
+     *
+     * @param positionX X position to write the text
+     * @param offsetY Y offset to write the text
+     * @param font to display the text
+     * @param fontSize to display the text
+     * @param fontHeight to determine the extra Y offset
+     * @param text string to write
+     */
+    private void addParagraph(float positionX, float offsetY, PDFont font, float fontSize, float fontHeight, String text) throws IOException {
+        addParagraph(positionX, offsetY, false, font, fontSize, fontHeight, text, width);
+    }
+
+    /**
+     * Adds one or multiple lines of text to the PDF
+     *
+     * @param positionX X position to write the text
+     * @param offsetY Y offset to write the text
+     * @param setYToHeightCounter set Y location to height counter
+     * @param font to display the text
+     * @param fontSize to display the text
+     * @param fontHeight to determine the extra Y offset
+     * @param text string to write
+     */
+    private void addParagraph(float positionX, float offsetY, boolean setYToHeightCounter, PDFont font, float fontSize, float fontHeight, String text) throws IOException {
+        addParagraph(positionX, offsetY, setYToHeightCounter, font, fontSize, fontHeight, text, width);
+    }
+
+    /**
+     * Adds one or multiple lines of text to the PDF
+     *
+     * @param positionX X position to write the text
+     * @param offsetY Y offset to write the text
+     * @param setYToHeightCounter set Y location to height counter
+     * @param font to display the text
+     * @param fontSize to display the text
+     * @param fontHeight to determine the extra Y offset
+     * @param text string to write
+     * @param width available width
+     */
+    private void addParagraph(float positionX, float offsetY, boolean setYToHeightCounter, PDFont font, float fontSize, float fontHeight, String text, float width) throws IOException {
+        List<String> lines = parseLines(text.replaceAll("\\p{Cntrl}", ""), width, font, fontSize);
+        contentStream.setFont(font, fontSize);
+
+        float neededHeight = lines.size() * (wrapOffsetY + fontHeight) + offsetY - wrapOffsetY;
+
+        if (heightCounter - neededHeight < endY) {
+            // Create new page
+            contentStream.endText();
+            contentStream.close();
+            page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            contentStream = new PDPageContentStream(document, page);
+            contentStream.beginText();
+            contentStream.setFont(font, fontSize);
+
+            for (int i = 0; i < lines.size(); i++) {
+                if (i == 0) {
+                    contentStream.newLineAtOffset(positionX, startY - fontHeight);
+                    heightCounter = startY - fontHeight;
+                    currentXPosition = positionX;
+                }
+                else {
+                    contentStream.newLineAtOffset(0, - wrapOffsetY - fontHeight);
+                    heightCounter -= wrapOffsetY + fontHeight;
+                }
+                contentStream.showText(lines.get(i));
+            }
+        }
+        else if (setYToHeightCounter) {
+            for (int i = 0; i < lines.size(); i++) {
+                if (i == 0) {
+                    contentStream.newLineAtOffset(positionX, heightCounter - offsetY - fontHeight);
+                    heightCounter -= offsetY + fontHeight;
+                    currentXPosition = positionX;
+                }
+                else {
+                    contentStream.newLineAtOffset(0, - wrapOffsetY - fontHeight);
+                    heightCounter -= wrapOffsetY + fontHeight;
+                }
+                contentStream.showText(lines.get(i));
+            }
+        }
+        else {
+            for (int i = 0; i < lines.size(); i++) {
+                if (i == 0) {
+                    contentStream.newLineAtOffset(positionX - currentXPosition, - offsetY - fontHeight);
+                    heightCounter -= offsetY + fontHeight;
+                    currentXPosition += positionX - currentXPosition;
+                }
+                else {
+                    contentStream.newLineAtOffset(0, - wrapOffsetY - fontHeight);
+                    heightCounter -= wrapOffsetY + fontHeight;
+                }
+                contentStream.showText(lines.get(i));
+            }
+        }
+    }
+
+    /**
+     * Splits up the text depending on the available width, the font and the font size
+     *
+     * @param text string to split
+     * @param width available width
+     * @param font font for the text
+     * @param fontSize font size for the text
+     * @return a list of split strings
+     */
+    private static List<String> parseLines(String text, float width, PDFont font, float fontSize) throws IOException {
+        List<String> lines = new ArrayList<String>();
+        int lastSpace = -1;
+        while (text.length() > 0) {
+            int spaceIndex = text.indexOf(' ', lastSpace + 1);
+            if (spaceIndex < 0)
+                spaceIndex = text.length();
+            String subString = text.substring(0, spaceIndex);
+            float size = fontSize * font.getStringWidth(subString) / 1000;
+            if (size > width) {
+                if (lastSpace < 0){
+                    lastSpace = spaceIndex;
+                }
+                subString = text.substring(0, lastSpace);
+                lines.add(subString);
+                text = text.substring(lastSpace).trim();
+                lastSpace = -1;
+            } else if (spaceIndex == text.length()) {
+                lines.add(text);
+                text = "";
+            } else {
+                lastSpace = spaceIndex;
+            }
+        }
+        return lines;
+    }
+
+    public static Bitmap getBitmapFromView(View view) {
+        //Define a bitmap with the same size as the view
+        Bitmap returnedBitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(),Bitmap.Config.ARGB_8888);
+        //Bind a canvas to it
+        Canvas canvas = new Canvas(returnedBitmap);
+        // draw the view on the canvas
+        view.draw(canvas);
+        //return the bitmap
+        return returnedBitmap;
     }
 
     /**

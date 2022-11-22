@@ -32,6 +32,7 @@ import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.data.LineDataSet;
 import com.github.mikephil.charting.formatter.ValueFormatter;
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import com.educat.android.educatapp.R;
 import com.educat.android.educatapp.graphs.CoupleChartGestureListener;
@@ -138,7 +139,12 @@ public class GraphActivity extends AppCompatActivity {
 
         String jsonStreamSetup = setupSharedPreferences.getString("stream_setup", "");
         if (jsonStreamSetup != null && !jsonStreamSetup.equals("")){
-            streamSetup = gson.fromJson(jsonStreamSetup, Setup.class);
+            try {
+                streamSetup = gson.fromJson(jsonStreamSetup, Setup.class);
+            }
+            catch (JsonSyntaxException e) {
+                jsonStreamSetup = null;
+            }
         }
 
         if (graphVariableArrayList == null){
@@ -188,6 +194,10 @@ public class GraphActivity extends AppCompatActivity {
             }
         }
         else {
+            // setup changed, remove streamSetup
+            setupSharedPreferences.edit().remove("stream_setup").apply();
+            streamSetup = null;
+
             if (memorySetup != null){
                 setupSharedPreferences.edit().putString("last_setup_in_memory", jsonMemorySetup).apply();
                 streamSetup = Utilities.generateStreamSetup(memorySetup);
@@ -498,7 +508,13 @@ public class GraphActivity extends AppCompatActivity {
         }
         else {
             // TODO check special codes implementation (big decimal = null)
-            BigDecimal bigDecimal = bigDecimalArrayList.get(bigDecimalArrayList.size() - realTimeClockValueIndex);
+            BigDecimal bigDecimal;
+            try {
+                bigDecimal = bigDecimalArrayList.get(bigDecimalArrayList.size() - realTimeClockValueIndex);
+            }
+            catch (ArrayIndexOutOfBoundsException e) {
+                bigDecimal = null;
+            }
             if (bigDecimal != null){
                 timeStampArrayList.add(bigDecimal.longValue());
             }

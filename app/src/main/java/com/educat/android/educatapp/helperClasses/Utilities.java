@@ -181,6 +181,7 @@ public class Utilities {
         }
         catch (RuntimeException e) {
             MyLog.e(TAG, "RuntimeException while making toast: " + text);
+            Toast.makeText(context, text, duration).show();
         }
     }
 
@@ -1769,6 +1770,8 @@ public class Utilities {
 
         i = 0;
 
+        int nullValueCount = 0;
+
         // For every instrument in the setup
         for (Instrument instrument : instrumentArrayList){
 
@@ -1810,11 +1813,20 @@ public class Utilities {
                         bytes[index++] = floatBytes[2];
                         bytes[index++] = floatBytes[3];
 
-                        Utilities.displayToast(context, "Warning: one or more parameters have a \"null\" value assigned, which is replaced with a zero value");
+                        nullValueCount++;
                     }
                 }
             }
             i++;
+        }
+
+        if (nullValueCount > 0) {
+            if (nullValueCount == 1) {
+                Utilities.displayToast(context, "Warning: one parameter has a \"null\" value assigned, which is replaced with a zero value in the RAW setup");
+            }
+            else {
+                Utilities.displayToast(context, "Warning: " + nullValueCount + " parameters have a \"null\" value assigned, which is replaced with a zero value in the RAW setup");
+            }
         }
 
         // End of text (ETX)

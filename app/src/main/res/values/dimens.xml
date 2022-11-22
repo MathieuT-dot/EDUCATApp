@@ -4,6 +4,7 @@
     <dimen name="font_size_title">16sp</dimen>
     <dimen name="font_size_normal">14sp</dimen>
     <dimen name="font_size_small">12sp</dimen>
+    <dimen name="font_size_marker">22sp</dimen>
 
     <dimen name="width_questionnaire_item_details">81dp</dimen>
     <dimen name="width_connected_user_details">96dp</dimen>
@@ -14,8 +15,19 @@
     <dimen name="height_button">50dp</dimen>
     <dimen name="height_logo">100dp</dimen>
 
+    <dimen name="padding_parent">2dp</dimen>
     <dimen name="padding_button">20dp</dimen>
     <dimen name="padding_scale">40dp</dimen>
     <dimen name="padding_seek_bar">8dp</dimen>
+
+    <dimen name="body_chart_size">288dp</dimen>
+    <dimen name="selector">30dp</dimen>
+    <dimen name="selector_edge_small">9dp</dimen>
+    <dimen name="selector_edge_normal">6dp</dimen>
+    <dimen name="selector_edge_big">3dp</dimen>
+    <dimen name="selector_margin">2dp</dimen>
+    <dimen name="brush_size_small">2dp</dimen>
+    <dimen name="brush_size_normal">4dp</dimen>
+    <dimen name="brush_size_big">6dp</dimen>
 
 </resources>

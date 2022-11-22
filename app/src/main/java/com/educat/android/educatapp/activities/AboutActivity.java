@@ -3,14 +3,13 @@ package com.educat.android.educatapp.activities;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
 import android.text.Html;
 import android.widget.TextView;
 
+import androidx.appcompat.app.AppCompatActivity;
+
 import com.educat.android.educatapp.R;
 import com.educat.android.educatapp.helperClasses.Constants;
-
-import java.util.Locale;
 
 /**
  * AboutActivity
@@ -50,13 +49,7 @@ public class AboutActivity extends AppCompatActivity {
         versionKeyTextView.setText(getString(R.string.about_version_key));
 
         TextView versionValueTextView = findViewById(R.id.about_version_value_text_view);
-        versionValueTextView.setText(versionName + " (" + versionCode + ")");
-
-        TextView localeKeyTextView = findViewById(R.id.about_locale_key_text_view);
-        localeKeyTextView.setText(getString(R.string.about_locale_key));
-
-        TextView localeValueTextView = findViewById(R.id.about_locale_value_text_view);
-        localeValueTextView.setText(Locale.getDefault().getLanguage().toUpperCase() + "-" + Locale.getDefault().getCountry());
+        versionValueTextView.setText(String.format("%s", versionName));
 
         TextView changelogKeyTextView = findViewById(R.id.changelog_key_text_view);
         changelogKeyTextView.setText(getString(R.string.about_changelog_key));

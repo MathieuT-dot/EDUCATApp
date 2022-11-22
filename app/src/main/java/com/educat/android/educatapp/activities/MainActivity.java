@@ -2,8 +2,10 @@ package com.educat.android.educatapp.activities;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.splashscreen.SplashScreen;
 import androidx.preference.PreferenceManager;
 
+import android.app.ActivityManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.ProgressDialog;
@@ -51,8 +53,8 @@ import eltos.simpledialogfragment.SimpleDialog;
 /**
  * Interreg VA 2 Seas – Project EDUCAT
  * WP 1, Activity 1.1, Deliverable 1.1.2 and 1.1.3
- * Date 2020/07, PP4, Author Mathieu Troch
- * Version Number 4.1
+ * Date 2020/08, PP4, Author Mathieu Troch
+ * Version Number 4.2
  * EDUCAT App
  *
  * MainActivity
@@ -75,11 +77,11 @@ public class MainActivity extends AppCompatActivity implements SimpleDialog.OnDi
     private EditText usernameEditText;
     private EditText passwordEditText;
 
+    private Button controlPanelButton;
     private Button viewQuestionnairesButton;
     private Button viewSubmittedQuestionnairesButton;
     private Button setupMenuButton;
     private Button measurementMenuButton;
-    private Button usbCommunicationButton;
     private Button oasButton;
     private Button graphButton;
     private Button valuesButton;
@@ -115,6 +117,9 @@ public class MainActivity extends AppCompatActivity implements SimpleDialog.OnDi
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Handle the splash screen transition.
+        SplashScreen splashScreen = SplashScreen.installSplashScreen(this);
         setContentView(R.layout.activity_main);
 
         if(getIntent().getBooleanExtra("KILL_APP", false)){
@@ -176,6 +181,13 @@ public class MainActivity extends AppCompatActivity implements SimpleDialog.OnDi
             }
         });
 
+        controlPanelButton = findViewById(R.id.control_panel_button);
+        controlPanelButton.setOnClickListener(v -> {
+            enableButtons(false);
+            Intent intent = new Intent(context, ControlPanelActivity.class);
+            startActivity(intent);
+        });
+
         viewQuestionnairesButton = findViewById(R.id.view_questionnaires_button);
         viewQuestionnairesButton.setOnClickListener(v -> {
             enableButtons(false);
@@ -225,13 +237,6 @@ public class MainActivity extends AppCompatActivity implements SimpleDialog.OnDi
             startActivity(intent);
         });
 
-        usbCommunicationButton = findViewById(R.id.usb_communication_button);
-        usbCommunicationButton.setOnClickListener(v -> {
-            enableButtons(false);
-            Intent intent = new Intent(context, UsbActivity.class);
-            startActivity(intent);
-        });
-
         TextView buttonTermsAndConditionsTextView = findViewById(R.id.button_terms_and_conditions_text_view);
         buttonTermsAndConditionsTextView.setOnClickListener(v -> {
             Intent intent = new Intent(context, TermsAndConditionsActivity.class);
@@ -244,6 +249,9 @@ public class MainActivity extends AppCompatActivity implements SimpleDialog.OnDi
         else {
             String actionString = getIntent().getAction();
             if (actionString != null && actionString.contains("android.hardware.usb.action.USB_ACCESSORY_ATTACHED") && !UsbAndTcpService.isRunning()){
+                if (permissionsSharedPreferences.getBoolean(Constants.PERMISSION_SETUP_CREATE, false)) {
+                    controlPanelButton.setVisibility(View.VISIBLE);
+                }
                 startUsbService();
             }
         }
@@ -251,6 +259,19 @@ public class MainActivity extends AppCompatActivity implements SimpleDialog.OnDi
         prepareNotificationChannels();
 
         showPrivacyPolicy();
+
+        // memory debugging
+        Runtime rt = Runtime.getRuntime();
+        // currently available memory in bytes
+        long maxMemory = rt.maxMemory();
+        MyLog.v("onCreate", "maxMemory: " + Long.toString(maxMemory) + " bytes");
+        ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        // available memory in megabytes without largeHeap
+        int memoryClass = am.getMemoryClass();
+        MyLog.v("onCreate", "memoryClass: " + Integer.toString(memoryClass) + " megabytes");
+        // available memory in megabytes with largeHeap
+        int largeMemoryClass = am.getLargeMemoryClass();
+        MyLog.v("onCreate", "largeMemoryClass: " + Integer.toString(largeMemoryClass) + " megabytes");
     }
 
     @Override
@@ -258,6 +279,10 @@ public class MainActivity extends AppCompatActivity implements SimpleDialog.OnDi
         super.onResume();
         enableButtons(true);
         checkLoginStatusOnDevice();
+
+        if (UsbAndTcpService.isRunning()) {
+            controlPanelButton.setVisibility(View.VISIBLE);
+        }
     }
 
     @Override
@@ -277,7 +302,7 @@ public class MainActivity extends AppCompatActivity implements SimpleDialog.OnDi
         viewSubmittedQuestionnairesButton.setEnabled(b);
         setupMenuButton.setEnabled(b);
         measurementMenuButton.setEnabled(b);
-        usbCommunicationButton.setEnabled(b);
+        controlPanelButton.setEnabled(b);
         oasButton.setEnabled(b);
         graphButton.setEnabled(b);
         valuesButton.setEnabled(b);
@@ -376,9 +401,6 @@ public class MainActivity extends AppCompatActivity implements SimpleDialog.OnDi
 
             defaultEditor.putBoolean(username + "_" + Constants.SETTING_QNR_DRAFT_SUBMIT, defaultSharedPreferences.getBoolean(Constants.SETTING_QNR_DRAFT_SUBMIT, false)).apply();
             defaultEditor.putBoolean(Constants.SETTING_QNR_DRAFT_SUBMIT, false).apply();
-
-//            defaultEditor.putString(username + "_" + Constants.SETTING_SERVER_API_URL, defaultSharedPreferences.getString(Constants.SETTING_SERVER_API_URL, Constants.API_URL)).apply();
-//            defaultEditor.putString(Constants.SETTING_SERVER_API_URL, Constants.API_URL).apply();
         }
 
         loginEditor.putBoolean("logged_in", false).apply();
@@ -424,62 +446,6 @@ public class MainActivity extends AppCompatActivity implements SimpleDialog.OnDi
                             MyLog.d(TAG, "updateUrl: " + updateUrl);
                             String developmentUrl = Utilities.extractUrl(response, "development");
                             MyLog.d(TAG, "developmentUrl: " + developmentUrl);
-
-                            if (!defaultSharedPreferences.getBoolean(Constants.SETTING_SERVER_CUSTOM_URL, false)){
-                                // custom url is disabled
-                                MyLog.d(TAG, "custom url is disabled");
-                                if (!developmentUrl.equals("") && defaultSharedPreferences.getBoolean(Constants.SETTING_SERVER_DEVELOPER_URL, false)){
-                                    // the developer url is not empty and the developer url is enabled
-                                    MyLog.d(TAG, "the developer url is not empty and the developer url is enabled");
-                                    if (!developmentUrl.equals(defaultSharedPreferences.getString(Constants.SETTING_SERVER_API_URL, Constants.API_URL))){
-                                        // the current url is not equal to the developer url
-                                        MyLog.d(TAG, "the current url is not equal to the developer url");
-                                        defaultEditor.putString(Constants.SETTING_SERVER_API_URL, developmentUrl).apply();
-                                        forceLogOut();
-                                        hideDialog();
-                                        return;
-                                    }
-                                }
-                                else {
-                                    // the developer url is empty or the developer url is disabled
-                                    MyLog.d(TAG, "the developer url is empty or the developer url is disabled");
-                                    if (developmentUrl.equals(defaultSharedPreferences.getString(Constants.SETTING_SERVER_API_URL, Constants.API_URL))){
-                                        // the developer url is disabled but it still used, reset to standard url
-                                        MyLog.d(TAG, "the developer url is disabled but it still used, reset to standard url");
-                                        defaultEditor.putString(Constants.SETTING_SERVER_API_URL, Constants.API_URL).apply();
-                                        forceLogOut();
-                                        hideDialog();
-                                        return;
-                                    }
-
-                                    if (!updateUrl.equals("")){
-                                        // the update url is not empty
-                                        MyLog.d(TAG, "the update url is not empty");
-                                        if (!updateUrl.equals(defaultSharedPreferences.getString(Constants.SETTING_SERVER_API_URL, Constants.API_URL))){
-                                            // the update url is not equal to the developer url
-                                            MyLog.d(TAG, "the update url is not equal to the developer url");
-                                            defaultEditor.putString(Constants.SETTING_SERVER_API_URL, updateUrl).apply();
-                                            forceLogOut();
-                                            hideDialog();
-                                            return;
-                                        }
-                                    }
-                                    else {
-                                        if (!localUrl.equals("")){
-                                            // the local url is not empty
-                                            MyLog.d(TAG, "the local url is not empty");
-                                            if (!localUrl.equals(defaultSharedPreferences.getString(Constants.SETTING_SERVER_API_URL, Constants.API_URL))){
-                                                // the local url is not equal to the developer url
-                                                MyLog.d(TAG, "the local url is not equal to the developer url");
-                                                defaultEditor.putString(Constants.SETTING_SERVER_API_URL, localUrl).apply();
-                                                forceLogOut();
-                                                hideDialog();
-                                                return;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
 
                             try {
                                 currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
@@ -530,29 +496,15 @@ public class MainActivity extends AppCompatActivity implements SimpleDialog.OnDi
                             }
 
                         } else {
-                            if (defaultSharedPreferences.getString((Constants.SETTING_SERVER_API_URL), Constants.API_URL).equals(Constants.API_URL)) {
-                                hideDialog();
-                                Utilities.displayToast(context, getString(R.string.server_test_unsuccessful));
-                                MyLog.d(TAG, getString(R.string.server_test_unsuccessful));
-                            } else {
-                                Utilities.displayToast(context, "Custom URL not available, resetting to EDUCAT URL");
-                                MyLog.d(TAG, "Custom URL not available, resetting to EDUCAT URL");
-                                defaultEditor.putString(Constants.SETTING_SERVER_API_URL, Constants.API_URL).apply();
-                                checkConnectionToServer();
-                            }
+                            hideDialog();
+                            Utilities.displayToast(context, getString(R.string.server_test_unsuccessful));
+                            MyLog.d(TAG, getString(R.string.server_test_unsuccessful));
                         }
                     },
                     e -> {
-                        if (defaultSharedPreferences.getString((Constants.SETTING_SERVER_API_URL), Constants.API_URL).equals(Constants.API_URL)) {
-                            MyLog.e(TAG, "Volley Error: " + e.toString() + ", " + e.getMessage() + ", " + e.getLocalizedMessage());
-                            hideDialog();
-                            Utilities.displayVolleyError(context, e);
-                        } else {
-                            Utilities.displayToast(context, "Custom URL not available, resetting to EDUCAT URL");
-                            MyLog.d(TAG, "Custom URL not available, resetting to EDUCAT URL");
-                            defaultEditor.putString(Constants.SETTING_SERVER_API_URL, Constants.API_URL).apply();
-                            checkConnectionToServer();
-                        }
+                        MyLog.e(TAG, "Volley Error: " + e.toString() + ", " + e.getMessage() + ", " + e.getLocalizedMessage());
+                        hideDialog();
+                        Utilities.displayVolleyError(context, e);
                     }){
 
                 @Override
@@ -988,12 +940,10 @@ public class MainActivity extends AppCompatActivity implements SimpleDialog.OnDi
 
         if (permissionsSharedPreferences.getBoolean(Constants.PERMISSION_SETUP_CREATE, false)) {
             setupMenuButton.setVisibility(View.VISIBLE);
-            usbCommunicationButton.setVisibility(View.VISIBLE);
             graphButton.setVisibility(View.VISIBLE);
             valuesButton.setVisibility(View.VISIBLE);
         } else {
             setupMenuButton.setVisibility(View.GONE);
-            usbCommunicationButton.setVisibility(View.GONE);
             graphButton.setVisibility(View.GONE);
             valuesButton.setVisibility(View.GONE);
         }

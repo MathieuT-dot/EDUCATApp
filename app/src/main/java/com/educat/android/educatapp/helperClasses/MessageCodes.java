@@ -26,11 +26,12 @@ public class MessageCodes {
     public static final int USB_MSG_SEND_DATA = 117;
     public static final int USB_MSG_START_MEASUREMENT = 118;
     public static final int USB_MSG_STOP_MEASUREMENT = 119;
-    public static final int USB_MSG_SEND_MEASUREMENT_LIST = 120;
     public static final int USB_MSG_STORE_OR_DELETE = 121;
     public static final int USB_MSG_REQUEST_JSON_SETUP = 122;
     public static final int USB_MSG_MANUAL_MEASUREMENT_STARTED = 123;
     public static final int USB_MSG_MANUAL_MEASUREMENT_STOPPED = 124;
     public static final int USB_MSG_INIT = 125;
     public static final int USB_MSG_STATUS_UPDATE = 126;
+    public static final int USB_MSG_UI_FEEDBACK = 127;
+
 }

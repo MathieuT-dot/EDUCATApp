@@ -423,11 +423,13 @@ public class SubmissionsActivity extends AppCompatActivity {
                 int previousSubmissionId = 0;
                 if (!currentSubmission.isNull("prev_submission_id")){
                     previousSubmissionId = currentSubmission.getInt("prev_submission_id");
+//                    MyLog.d(TAG, "ID: " + id + " | Previous submission ID: " + previousSubmissionId);
                 }
 
                 int nextSubmissionId = 0;
                 if (!currentSubmission.isNull("next_submission_id")){
                     nextSubmissionId = currentSubmission.getInt("next_submission_id");
+//                    MyLog.d(TAG, "ID: " + id + " | Next submission ID: " + nextSubmissionId);
                 }
 
                 String createdAt = currentSubmission.getString("created_at");
@@ -445,6 +447,9 @@ public class SubmissionsActivity extends AppCompatActivity {
                 if (!updatedAt.equals("null")) {
                     try {
                         updatedAt = sdfDateAndTime.format(sdfDateAndTimeLaravel.parse(updatedAt));
+//                        if (!createdAt.equals("null") && !createdAt.equals(updatedAt)) {
+//                            MyLog.d(TAG, "ID: " + id + " | Updated at: " + updatedAt);
+//                        }
                     } catch (ParseException e) {
                         e.printStackTrace();
                     }
@@ -535,10 +540,14 @@ public class SubmissionsActivity extends AppCompatActivity {
                         }
                     }
 
+                    // TODO comment to display all submitted questionnaires
                     if (filterStartDateBool && filterEndDateBool && filterQuestionnaireIdBool && filterUsernameBool && nextSubmissionId == 0)
                     {
                         submissionsArrayList.add(new SubmittedQuestionnaire(id, questionnaireId, questionnaireGroupId, version, title, description, userId, userName, createdAt, updatedAt, previousSubmissionId, nextSubmissionId));
                     }
+
+                    // TODO uncomment to display all submitted questionnaires
+//                    submissionsArrayList.add(new SubmittedQuestionnaire(id, questionnaireId, questionnaireGroupId, version, title, description, userId, userName, createdAt, updatedAt, previousSubmissionId, nextSubmissionId));
                 }
             }
 
@@ -909,7 +918,23 @@ public class SubmissionsActivity extends AppCompatActivity {
 
             OutputStream outputStream;
 
-            String name = submittedQuestionnaireId + "_" + submittedQuestionnaire.getDate().substring(0, 10) + "_" + submittedQuestionnaire.getUserName() + "_" + submittedQuestionnaire.getTitle() + ".pdf";
+            StringBuilder stringBuilder = new StringBuilder();
+            stringBuilder.append(submittedQuestionnaireId).append("_").append(submittedQuestionnaire.getDate().substring(0, 10)).append("_");
+            if (submittedQuestionnaire.getUserName() != null && !submittedQuestionnaire.getUserName().equals("") && !submittedQuestionnaire.getUserName().equals("null")) {
+                stringBuilder.append(submittedQuestionnaire.getUserName());
+            }
+            else {
+                stringBuilder.append(submittedQuestionnaire.getUserId());
+            }
+            stringBuilder.append("_").append(submittedQuestionnaire.getTitle());
+            if (submittedQuestionnaire.getPreviousSubmissionId() != 0) {
+                stringBuilder.append("_PREV_").append(submittedQuestionnaire.getPreviousSubmissionId());
+            }
+            if (submittedQuestionnaire.getNextSubmissionId() != 0) {
+                stringBuilder.append("_NEXT_").append(submittedQuestionnaire.getNextSubmissionId());
+            }
+            stringBuilder.append(".pdf");
+            String name = stringBuilder.toString();
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 MyLog.d(TAG, "MediaStore used");
